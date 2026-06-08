@@ -1,0 +1,11 @@
+[project]
+name = "isra"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "apps/ingest",
+    "apps/evals",
+    "packages/retrieval",
+]
