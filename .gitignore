@@ -1,39 +1,43 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# Dependencies
-node_modules
+# --- Dependencies ---
+node_modules/
 .pnp
 .pnp.js
+.uv/
+uv.lock
+bun.lock
 
-# Local env files
+# --- Local env files ---
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
-# Testing
-coverage
+# --- Testing ---
+coverage/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
-# Turbo
-.turbo
+# --- Turbo ---
+.turbo/
 
-# Vercel
+# --- Vercel ---
 .vercel
 
-# Build Outputs
+# --- Build outputs ---
 .next/
 out/
-build
-dist
+build/
+dist/
 
-# Debug
+# --- Debug ---
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Misc
-*.pem
 
 # --- OS ---
 .DS_Store
@@ -65,24 +69,15 @@ wheels/
 *.whl
 pip-wheel-metadata/
 share/python-wheels/
-*.manifest
 *.spec
 install-record.txt
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.hypothesis/
-.coverage
-.coverage.*
-coverage/
-coverage.xml
-htmlcov/
 .tox/
 .nox/
 *.log
 *.pot
 instance/
 .mxmake/
+.python-version
 
 # --- Virtual Environments ---
 .venv/
@@ -106,24 +101,29 @@ ENV/
 .ensime
 
 # --- Environment / Secrets ---
-.env.*
-!.env.example
-!.env.template
 *.key
 *.cert
 
 # --- Jupyter ---
 .ipynb_checkpoints/
-*.ipynb_checkpoints/
 
-# --- Project / Lock files ---
+# --- Project: scraped datasets (large) ---
+data/raw/
+data/*.csv
+data/*.jsonl
+data/*.json
+data/*.parquet
+data/*.arrow
+data/*.zip
+data/*.gz
+data/*.zst
+data/*.pkl
+
+# --- Model / embedding caches ---
+.cache/
+*.pkl
+*.joblib
+*.bin
+
+# --- Lockfiles ---
 pnpm-lock.yaml
-
-# --- Python version (keep if you track it) ---
-.python-version
-
-# --- Node ---
-node_modules/
-
-# --- Local config files ---
-.env.local
