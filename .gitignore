@@ -127,3 +127,5 @@ data/*.pkl
 
 # --- Lockfiles ---
 pnpm-lock.yaml
+
+docs
