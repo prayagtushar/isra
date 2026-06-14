@@ -1,11 +1,13 @@
 [project]
 name = "isra"
+version = "0.1.0"
 requires-python = ">=3.11"
 
 [tool.uv.workspace]
-members = [
-    "apps/api",
-    "apps/ingest",
-    "apps/evals",
-    "packages/retrieval",
-]
+members = ["apps/api", "apps/ingest", "apps/evals", "packages/retrieval"]
+
+[tool.uv.sources]
+isra-retrieval = { workspace = true }
+isra-ingest = { workspace = true }
+isra-evals = { workspace = true }
+isra-api = { workspace = true }

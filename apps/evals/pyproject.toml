@@ -5,7 +5,6 @@ requires-python = ">=3.11"
 dependencies = [
     "isra-retrieval",
     "ragas",
-    "deepeval",
     "httpx",
 ]
 
