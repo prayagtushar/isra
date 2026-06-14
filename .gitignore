@@ -128,4 +128,16 @@ data/*.pkl
 # --- Lockfiles ---
 pnpm-lock.yaml
 
-docs
+# --- Local notes / scratch ---
+notes/
+
+# --- Private local guides / agent scratch / memory ---
+.local-guides/
+.remember/
+.claude/
+*.local.md
+*.private.md
+scratch/
+
+# --- Agent-generated plans and internal docs (keep local only) ---
+docs/

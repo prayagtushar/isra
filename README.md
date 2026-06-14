@@ -1,8 +1,10 @@
 # Indian Startup Ecosystem RAG
 
-Production RAG over Indian startup data (YC · Inc42 · Wikipedia · DPIIT). Hand-rolled hybrid search (vector + keyword) with BGE reranking, a measured eval suite, Langfuse tracing, and a streaming Next.js chat UI with inline citations — deployed end-to-end.
+Production RAG over Indian startup data (YC · Inc42 · Wikipedia · DPIIT). Hand-rolled hybrid search (vector + keyword) with BGE reranking, a measured eval suite, Langfuse tracing, and a streaming Next.js chat UI with inline citations.
 
-> The interview line this earns: *"I built the retrieval pipeline myself — embed → hybrid search → RRF fusion → rerank — and I can show you the eval numbers that prove each stage helps."*
+> ⚠️ **Status (Jun 2026): in active development.** The architecture, TS/Python contracts, and local Postgres + pgvector infra are in place; the ingest → retrieval → eval pipeline is being built out (see [Milestones](#milestones)). **Not yet deployed** — the demo / Langfuse / Loom links below are placeholders until then.
+
+> The interview line this is being built to earn: *"I built the retrieval pipeline myself — embed → hybrid search → RRF fusion → rerank — and the eval numbers show each stage helps."*
 
 ## Tech stack
 
@@ -21,7 +23,7 @@ golden set → evals runner → Ragas metrics → EVALUATION.md
 
 A single Postgres holds both halves of hybrid search: pgvector for semantic similarity and `tsvector` full-text for keyword/BM25. Results are fused with Reciprocal Rank Fusion, then reranked by a BGE cross-encoder.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and [EVALUATION.md](EVALUATION.md) for retrieval/answer metrics. Full spec: [docs/superpowers/specs/2026-06-09-rag-architecture-design.md](docs/superpowers/specs/2026-06-09-rag-architecture-design.md).
+Design decisions live in the [architecture spec](docs/superpowers/specs/2026-06-09-rag-architecture-design.md) and the [ingest plan](docs/superpowers/plans/2026-06-09-ingest-pipeline.md). `ARCHITECTURE.md` and `EVALUATION.md` (with retrieval/answer metrics) will be published once the pipeline and eval suite run.
 
 ## Monorepo layout
 
