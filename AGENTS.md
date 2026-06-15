@@ -1,40 +1,35 @@
 # AGENTS.md — Indian Startup Ecosystem RAG (ISRA)
 
-> This file is written for AI coding agents. It assumes you know nothing about this project. Read it before modifying code, running commands, or generating files.
+> Onboarding reference for AI coding agents working on this repo. Read this before modifying code or running commands.
 
 ---
 
 ## Project overview
 
-ISRA is a production-style RAG (Retrieval-Augmented Generation) system over Indian startup data. The stated goal is to demonstrate a hand-rolled retrieval pipeline — vector search + full-text search → RRF fusion → BGE rerank — backed by measured evals and a streaming Next.js chat UI.
-
-**Current status (June 2026):** The repository is an active work in progress. The monorepo layout, local Postgres + pgvector infra, dependency wiring, and FastAPI skeleton are in place. The core ingest → retrieval → eval pipeline is still being built out. See [`docs/BUILD_TASKS.md`](docs/BUILD_TASKS.md) for the implementation checklist.
-
-High-level flow (from the approved architecture spec):
+ISRA is a RAG (Retrieval-Augmented Generation) system over Indian startup data. It demonstrates a hand-rolled retrieval pipeline: vector search + Postgres full-text search → RRF fusion → BGE rerank, backed by measured evals and a streaming Next.js chat UI.
 
 ```
 scrapers → startups.jsonl → chunk → embed → Postgres (chunks + vectors + tsvector)
 user query → /chat → retrieve(hybrid + rerank) → prompt → LLM (stream) → SSE → UI
-                  └──────────────── Langfuse trace ─────────────────┘
+                  └────────────── Langfuse trace ──────────────┘
 golden set → evals runner → Ragas metrics → EVALUATION.md
 ```
 
-Key product decisions (do not change without checking the architecture spec):
+Key product decisions:
 
-- **No LangChain** anywhere. The retrieval pipeline is intentionally hand-rolled.
-- **No DeepEval**. Evals use Ragas only.
-- **One Postgres** does both vector (`pgvector`) and keyword (`tsvector`) search.
+- **No LangChain.** The retrieval pipeline is intentionally hand-rolled.
+- **No DeepEval.** Evals use Ragas only.
+- **One Postgres** handles both vector (`pgvector`) and keyword (`tsvector`) search.
 - **Embedding model:** `BAAI/bge-small-en-v1.5` → 384-dimensional vectors.
 - **Reranker:** BGE cross-encoder.
-- **LLM:** hosted API (Claude / OpenAI); cheap model for dev, stronger model for final eval numbers.
+- **LLM:** hosted API (Claude / OpenAI).
 - **Deployment target:** GCP Cloud Run (API), Vercel (web), Supabase (Postgres + pgvector).
-- **Budget target:** $0/month infra, ~$5–15 total LLM eval spend.
 
 ---
 
 ## Repository structure
 
-This is a **Turborepo + uv workspace monorepo**.
+This is a **Turborepo + uv workspace** monorepo.
 
 ```
 .
@@ -47,7 +42,7 @@ This is a **Turborepo + uv workspace monorepo**.
 │   ├── contracts/        # TypeScript API types generated from OpenAPI
 │   └── retrieval/        # shared Python retrieval library + DB layer
 ├── data/                 # scraped corpus + cache (large files gitignored)
-├── docs/                 # guides, build tasks, architecture specs, plans
+├── docs/                 # gitignored; private build plans and guides
 ├── infra/                # Docker compose + init scripts
 ├── notebooks/            # embedding experiments
 ├── pyproject.toml        # root uv workspace manifest
@@ -59,7 +54,8 @@ This is a **Turborepo + uv workspace monorepo**.
 
 - **Stack:** FastAPI, SSE streaming, Langfuse, psycopg, pgvector, sentence-transformers, numpy.
 - **Entry:** `apps/api/src/main.py`.
-- **Current state:** only a `/health` endpoint exists. Planned endpoints:
+- **Endpoints:**
+  - `GET /health`
   - `POST /search` — ranked chunks.
   - `POST /chat` — SSE streaming chat with sources + inline citations.
   - `POST /feedback` — thumbs up/down stored in Postgres.
@@ -68,42 +64,30 @@ This is a **Turborepo + uv workspace monorepo**.
 ### `apps/ingest`
 
 - **Stack:** httpx, BeautifulSoup4, lxml, Pydantic v2.
-- **Goal:** scrape 50–100 Indian startups, normalize into a `Startup` Pydantic model, dedupe, chunk (naive + semantic), embed, and load into Postgres.
+- **Goal:** scrape Indian startups, normalize into a `Startup` Pydantic model, dedupe, chunk (naive + semantic), embed, and load into Postgres.
 - **Run:** `bun run ingest`.
-- **Current state:** mostly empty; implementation plan is in `docs/superpowers/plans/2026-06-09-ingest-pipeline.md`.
 
 ### `apps/evals`
 
 - **Stack:** Ragas, httpx.
-- **Goal:** ~30-question golden set, two controlled experiments (retrieval mode + chunking strategy), output `EVALUATION.md`.
+- **Goal:** golden-set evaluation covering retrieval mode and chunking experiments, outputting `EVALUATION.md`.
 - **Run:** `bun run eval`.
-- **Current state:** empty.
 
 ### `apps/web`
 
 - **Stack:** Next.js 16.2.0, React 19.2.0, TypeScript 5.9.2, Bun.
-- **Current state:** default Next.js app skeleton with a single landing page.
-- **Planned:** streaming chat UI with progressive source cards and inline `[Source N]` citations.
 - **Run:** `bun run dev:web` → `http://localhost:3000`.
 
 ### `packages/retrieval`
 
 - **Stack:** pgvector, sentence-transformers, psycopg, numpy.
-- **Responsibility:** shared data layer for the whole monorepo.
-- **Planned contents:**
-  - `db.py` — DSN helper + psycopg connection context manager.
-  - `schema.sql` — `startups` + `chunks` tables with `vector(384)` and `tsvector` columns, HNSW + GIN indexes.
-  - `embeddings.py` — lazy-loaded BGE embedder wrapper.
-  - `models.py` — `Chunk` dataclass.
-  - `retrieve.py` — public `retrieve(query, top_k, mode)` where `mode ∈ {vector, hybrid, hybrid+rerank}`.
-- **Current state:** package config and empty `__init__.py` exist; implementation pending.
+- **Responsibility:** shared data layer and retrieval logic.
+- **Public API:** `retrieve(query, top_k, mode)` where `mode ∈ {vector, hybrid, hybrid+rerank}`.
 
 ### `packages/contracts`
 
-- **Stack:** TypeScript, `openapi-typescript`.
-- **Purpose:** single source of truth for API request/response types used by the UI.
+- TypeScript API types used by the UI.
 - **Regenerate:** `bun run gen:contracts` (requires API running on `localhost:8000`).
-- **Current types are hand-written placeholders** for `SearchResponse`, `ChatRequest`, `ChatResponse`, `FeedbackRequest`.
 
 ---
 
@@ -128,54 +112,41 @@ This is a **Turborepo + uv workspace monorepo**.
 | Observability | Langfuse Cloud |
 | Local infra | Docker Compose |
 | Deployment | GCP Cloud Run, Vercel, Supabase |
-| Testing | pytest (Python), no JS test runner yet |
+| Testing | pytest (Python) |
 
 ---
 
 ## Build, install, and run commands
 
-All commands below are run from the repository root unless noted.
+Run all commands from the repository root unless noted.
 
 ### Install dependencies
 
 ```bash
-# Python workspace (api, ingest, evals, retrieval)
-uv sync
-
-# JS workspace (web, contracts)
-bun install
+uv sync       # Python workspace
+bun install   # JS workspace
 ```
 
 ### Local infrastructure
 
 ```bash
-# Start Postgres with pgvector
 docker compose -f infra/compose.yml up -d
-
-# Verify the vector extension is enabled
-docker exec isra-db psql -U isra -d isra -c "SELECT extname FROM pg_extension WHERE extname='vector';"
 ```
 
 Default local database URL: `postgresql://isra:isra@localhost:5432/isra`.
-In production, set `DATABASE_URL`.
+Set `DATABASE_URL` in production.
 
 ### Run the stack
 
 ```bash
-# Run the ingest pipeline (scrape → chunk → embed → load)
-bun run ingest
-
-# Start the FastAPI server with hot reload
-bun run dev:api
-
-# Start the Next.js dev server
-bun run dev:web
+bun run ingest    # scrape → chunk → embed → load
+bun run dev:api   # FastAPI with hot reload
+bun run dev:web   # Next.js dev server
 ```
 
 ### Type generation
 
 ```bash
-# Requires the API to be running on localhost:8000
 bun run gen:contracts
 ```
 
@@ -185,7 +156,7 @@ bun run gen:contracts
 bun run eval
 ```
 
-### Root package scripts (`package.json`)
+### Root package scripts
 
 | Script | Command |
 |--------|---------|
@@ -222,7 +193,7 @@ bun run eval
 ### Python workspace
 
 - Root `pyproject.toml` defines the uv workspace with members: `apps/api`, `apps/ingest`, `apps/evals`, `packages/retrieval`.
-- Each Python package has its own `pyproject.toml`, uses `hatchling` build backend, and declares `packages = ["src"]` (or `"src/isra_retrieval"`).
+- Each Python package has its own `pyproject.toml`, uses `hatchling`, and declares `packages = ["src"]` (or `"src/isra_retrieval"`).
 - Each Python package declares `dev = ["pytest"]` dependency group.
 - Shared local packages are referenced via workspace sources.
 
@@ -242,18 +213,17 @@ bun run eval
 ### Retrieval API
 
 - The public function is `retrieve(query, top_k, mode)`.
-- `mode` must support `"vector"`, `"hybrid"`, and `"hybrid+rerank"` so evals can compare them.
+- `mode` must support `"vector"`, `"hybrid"`, and `"hybrid+rerank"`.
 
 ### No LangChain / DeepEval
 
-Do not add LangChain, LangChain Community, or DeepEval dependencies. The project intentionally avoids them.
+Do not add LangChain, LangChain Community, or DeepEval dependencies.
 
 ---
 
 ## Testing strategy
 
 - **Python:** pytest in each package.
-- **Current state:** no test files exist yet; each package's `pyproject.toml` already declares `pytest` in the `dev` dependency group.
 - **Planned tests:**
   - `packages/retrieval`: RRF fusion correctness, rank ordering, mode parity against a fixture DB.
   - `apps/ingest`: schema validation, dedup/merge logic, cached-run idempotency.
@@ -265,9 +235,9 @@ Do not add LangChain, LangChain Community, or DeepEval dependencies. The project
 
 ## Environment variables and secrets
 
-- `DATABASE_URL` — Postgres connection string. Falls back to local default.
-- Langfuse keys will be needed for tracing (not yet configured).
-- LLM API keys will be needed for `/chat` and evals.
+- `DATABASE_URL` — Postgres connection string.
+- Langfuse keys for tracing.
+- LLM API keys for `/chat` and evals.
 
 All `.env*` files are gitignored. Do not commit secrets.
 
@@ -275,24 +245,9 @@ All `.env*` files are gitignored. Do not commit secrets.
 
 ## Deployment
 
-Target architecture:
-
-- **API:** GCP Cloud Run (ships the BGE models; expect ~500MB image and cold starts on scale-to-zero).
+- **API:** GCP Cloud Run (ships the BGE models; ~500MB image).
 - **Web:** Vercel.
 - **Database:** Supabase Postgres with pgvector.
-
-A Dockerfile for the API is planned but not yet present.
-
----
-
-## Important files to read before changes
-
-- [`README.md`](README.md) — high-level pitch and quickstart.
-- [`docs/BUILD_TASKS.md`](docs/BUILD_TASKS.md) — implementation checklist, phases 0–6.
-- [`docs/guides/phase-1-ingest-guide.md`](docs/guides/phase-1-ingest-guide.md) — detailed Phase 1 walkthrough.
-- [`docs/superpowers/specs/2026-06-09-rag-architecture-design.md`](docs/superpowers/specs/2026-06-09-rag-architecture-design.md) — approved architecture, decisions, and build order.
-- [`docs/superpowers/plans/2026-06-09-ingest-pipeline.md`](docs/superpowers/plans/2026-06-09-ingest-pipeline.md) — detailed ingest implementation plan.
-- [`infra/compose.yml`](infra/compose.yml) and [`infra/init.sql`](infra/init.sql) — local database.
 
 ---
 
@@ -306,10 +261,9 @@ A Dockerfile for the API is planned but not yet present.
 
 ---
 
-## Notes for agents
+## Agent notes
 
-- The project uses **Bun** as the JS package manager, not npm/pnpm/yarn. Use `bun install` and `bun run <script>`.
-- Use **uv** for all Python tasks. Prefer `uv run` over manual virtualenv activation.
-- Many planned modules are currently empty stubs. Do not assume a feature exists; verify by reading the file.
-- When implementing ingest/retrieval/eval tasks, follow the existing plans in `docs/superpowers/` and the checklist in `docs/BUILD_TASKS.md`.
+- Use **Bun** for JS: `bun install`, `bun run <script>`.
+- Use **uv** for Python: `uv sync`, `uv run`.
+- Do not assume a feature exists; verify by reading the file.
 - Update this `AGENTS.md` if you change the technology stack, package layout, build commands, or deployment strategy.
