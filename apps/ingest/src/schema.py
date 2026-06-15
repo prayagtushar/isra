@@ -11,6 +11,8 @@ class Startup(BaseModel):
     The model is frozen so that hashing by ``normalized_name`` is safe.
     """
 
+    model_config = {"frozen": True}
+
     name: str = Field(..., description="Display Name")
     normalized_name: str = Field(..., description="lowercase, alphanumeric")
     one_liner: Optional[str] = Field(None, description="One liner about the company")
@@ -18,7 +20,7 @@ class Startup(BaseModel):
         ..., description="long description about the startup", min_length=5
     )
     founders: List[str] = Field(..., description="Founders List", min_length=1)
-    founded_year: Optional[str] = Field(None, ge=1900, le=2100)
+    founded_year: Optional[int] = Field(None, ge=1900, le=2100)
     headquarters: Optional[str] = None
     fundings: Optional[float] = None
     sectors: List[str] = Field(default_factory=list)
@@ -28,8 +30,16 @@ class Startup(BaseModel):
         ..., description="URL from where this record was fetched"
     )
     scraped_date: Optional[datetime] = Field(
-        ..., description="Date and Time of scraping"
+        None, description="Date and Time of scraping"
     )
+
+    def __hash__(self) -> int:
+        return hash(self.normalized_name)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Startup):
+            return NotImplemented
+        return self.normalized_name == other.normalized_name
 
     @field_validator("normalized_name")
     @classmethod
