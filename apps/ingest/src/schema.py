@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class Startup(BaseModel):
@@ -10,8 +10,6 @@ class Startup(BaseModel):
     ``normalized_name`` is the stable deduplication key for the same startup.
     The model is frozen so that hashing by ``normalized_name`` is safe.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     name: str = Field(..., description="Display Name")
     normalized_name: str = Field(..., description="lowercase, alphanumeric")
@@ -37,12 +35,3 @@ class Startup(BaseModel):
     @classmethod
     def normalize(cls, name: str) -> str:
         return "".join(char.lower() for char in name if char.isalnum())
-
-    def __hash__(self) -> int:
-        return hash(self.normalized_name)
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Startup):
-            return NotImplemented
-        return self.normalized_name == other.normalized_name
-
