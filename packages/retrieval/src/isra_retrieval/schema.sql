@@ -49,12 +49,3 @@ CREATE TRIGGER chunks_tsvec_trigger
 BEFORE INSERT OR UPDATE ON chunks
 FOR EACH ROW
 EXECUTE FUNCTION chunks_update_tsvec();
-
-CREATE TABLE IF NOT EXISTS feedback (
-    id SERIAL PRIMARY KEY,
-    query TEXT NOT NULL,
-    answer TEXT,
-    thumbs BOOLEAN NOT NULL,
-    comment TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);

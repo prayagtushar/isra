@@ -48,14 +48,12 @@ def naive_chunk(
         end = min(start + chunk_size, len(words))
         chunk_text = " ".join(words[start:end])
         chunks.append(
-            [
                 Chunk(
                     text=chunk_text,
                     source_url=source_url,
                     startup_name=startup_name,
                     chunk_index=chunk_index,
                 )
-            ]
         )
         if end == len(words):
             break
