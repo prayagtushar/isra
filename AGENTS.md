@@ -12,13 +12,13 @@ ISRA is a RAG (Retrieval-Augmented Generation) system over Indian startup data. 
 scrapers → startups.jsonl → chunk → embed → Postgres (chunks + vectors + tsvector)
 user query → /chat → retrieve(hybrid + rerank) → prompt → LLM (stream) → SSE → UI
                   └────────────── Langfuse trace ──────────────┘
-golden set → evals runner → Ragas metrics → EVALUATION.md
+golden set → evals runner → retrieval (hit@k/MRR) + LLM-judge metrics → EVALUATION.md
 ```
 
 Key product decisions:
 
 - **No LangChain.** The retrieval pipeline is intentionally hand-rolled.
-- **No DeepEval.** Evals use Ragas only.
+- **No Ragas/DeepEval.** Evals use a hand-rolled LLM-judge — Ragas declares the LangChain family (langchain, langchain-community, langchain-openai) as core dependencies, which this repo bans.
 - **One Postgres** handles both vector (`pgvector`) and keyword (`tsvector`) search.
 - **Embedding model:** `BAAI/bge-small-en-v1.5` → 384-dimensional vectors.
 - **Reranker:** BGE cross-encoder.
@@ -69,9 +69,9 @@ This is a **Turborepo + uv workspace** monorepo.
 
 ### `apps/evals`
 
-- **Stack:** Ragas, httpx.
-- **Goal:** golden-set evaluation covering retrieval mode and chunking experiments, outputting `EVALUATION.md`.
-- **Run:** `bun run eval`.
+- **Stack:** `openai` SDK (→ OpenRouter), pydantic-settings; no external eval framework.
+- **Goal:** golden-set evaluation — deterministic retrieval-mode comparison (hit@k / MRR across `vector`, `hybrid`, `hybrid+rerank`) plus reference-free generation metrics (faithfulness, answer relevancy, context precision) scored by a hand-rolled LLM-judge — outputting `EVALUATION.md` (+ `evaluation.json` sidecar).
+- **Run:** `bun run eval` (add `-- --no-generation` for the retrieval-only, no-LLM path).
 
 ### `apps/web`
 
@@ -108,7 +108,7 @@ This is a **Turborepo + uv workspace** monorepo.
 | Reranker | BGE cross-encoder (sentence-transformers) |
 | Scraping | httpx, BeautifulSoup4, lxml |
 | Validation | Pydantic v2 |
-| Evals | Ragas |
+| Evals | Hand-rolled LLM-judge (OpenRouter via `openai` SDK) |
 | Observability | Langfuse Cloud |
 | Local infra | Docker Compose |
 | Deployment | GCP Cloud Run, Vercel, Supabase |
@@ -228,6 +228,7 @@ Do not add LangChain, LangChain Community, or DeepEval dependencies.
   - `packages/retrieval`: RRF fusion correctness, rank ordering, mode parity against a fixture DB.
   - `apps/ingest`: schema validation, dedup/merge logic, cached-run idempotency.
   - `apps/api`: endpoint tests with mocked LLM, SSE event-sequence tests.
+  - `apps/evals`: hit@k/MRR math with an injected `retrieve`, judge score-parsing/clamping, report rendering — all offline (no DB, no network).
 - **Run Python tests:** `uv run --directory <package> pytest`.
 - **Run all monorepo tasks:** `bun run test`.
 

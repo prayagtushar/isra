@@ -62,6 +62,9 @@ downloads/
 eggs/
 lib/
 lib64/
+# The lib/ rule above targets Python build output; don't let it swallow the
+# web app's source directory.
+!apps/web/lib/
 parts/
 sdist/
 var/
@@ -109,6 +112,8 @@ ENV/
 
 # --- Project: scraped datasets (large) ---
 data/raw/
+data/cache/
+**/data/cache/
 data/*.csv
 data/*.jsonl
 data/*.json
@@ -141,3 +146,7 @@ scratch/
 
 # --- Agent-generated plans and internal docs (keep local only) ---
 docs/
+
+# --- evals: keep EVALUATION.md tracked, ignore the regenerated JSON sidecar ---
+evaluation.json
+apps/evals/evaluation.json
