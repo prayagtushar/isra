@@ -5,7 +5,6 @@ from src.generation_eval import GenerationReport, ItemScore
 from src.report import build_json, render_markdown, write_report
 from src.retrieval_eval import ModeResult
 
-
 def _fixture():
     meta = {"generated_at": "2026-06-27T00:00:00Z", "n": 2, "top_k": 5, "model": "m"}
     modes = [
@@ -21,25 +20,22 @@ def _fixture():
     )
     return meta, modes, gen
 
-
 def test_render_has_sections_and_rows():
     meta, modes, gen = _fixture()
     md = render_markdown(meta, modes, gen)
     assert "# Evaluation" in md
     assert "Retrieval mode comparison" in md
     assert "hybrid+rerank" in md
-    assert "| 1.000 | 0.900 |" in md  # hit@k | MRR row for winning mode
+    assert "| 1.000 | 0.900 |" in md  
     assert "Generation quality" in md
     assert "Faithfulness" in md
-    assert "1/2" in md  # faithfulness coverage (1 of 2 scored)
-
+    assert "1/2" in md  
 
 def test_render_without_generation():
     meta, modes, _ = _fixture()
     md = render_markdown(meta, modes, None)
     assert "Retrieval mode comparison" in md
     assert "skipped" in md.lower()
-
 
 def test_write_report_emits_md_and_json(tmp_path: Path):
     meta, modes, gen = _fixture()
