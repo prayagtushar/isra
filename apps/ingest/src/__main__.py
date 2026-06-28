@@ -1,32 +1,23 @@
+import argparse
 import os
 
-import psycopg
 from dotenv import load_dotenv
 
-from src.chunker import naive_chunk
-from src.embedder import embed_text
-from src.loader import load_startups_and_chunks
-from src.sample_data import sample_startups
+from src.runner import run_ingest
 
 load_dotenv()
 
 def main() -> None:
-    url = os.environ.get("DATABASE_URL")
-    if not url:
+    parser = argparse.ArgumentParser(description="Ingest Indian startup data into Postgres")
+    parser.add_argument("--no-cache", action="store_true", help="Ignore cache and re-scrape")
+    parser.add_argument("--chunker", default="naive", choices=["naive", "semantic"], help="Chunking strategy")
+    parser.add_argument("--progress", action="store_true", help="Emit progress events as JSON lines")
+    args = parser.parse_args()
+
+    if not os.environ.get("DATABASE_URL"):
         raise ValueError("DATABASE_URL environment variable is not set")
 
-    startups = sample_startups()
-    
-    chunks = []
-    for s in startups:
-        chunks.extend(naive_chunk(s.description,str(s.source_url),s.normalized_name))
-    
-    embeddings = embed_text([c.text for c in chunks])
-    
-    with psycopg.connect(url) as conn:
-        load_startups_and_chunks(conn,startups,chunks,embeddings)
-    
-    print(f"Loaded {len(startups)} startups and {len(chunks)} chunks.")
+    run_ingest(use_cache=not args.no_cache, chunker=args.chunker)
 
 if __name__ == "__main__":
     main()

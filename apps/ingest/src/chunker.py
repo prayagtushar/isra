@@ -1,13 +1,11 @@
 from dataclasses import dataclass
 
-
 @dataclass(frozen=True)
 class Chunk:
     text: str
     source_url: str
     startup_name: str
     chunk_index: int
-
 
 def naive_chunk(
     text: str,
@@ -16,15 +14,7 @@ def naive_chunk(
     chunk_size: int = 200,
     overlap: int = 20,
 ) -> list[Chunk]:
-    """Split text into overlapping word windows.
-
-    Args:
-        text: Raw text to chunk.
-        source_url: URL the text came from.
-        startup_name: Normalized startup name this text belongs to.
-        chunk_size: Maximum number of words per chunk.
-        overlap: Number of words shared between consecutive chunks.
-    """
+    
 
     if not text or not text.strip():
         return []
@@ -59,7 +49,6 @@ def naive_chunk(
             break
 
     return chunks
-
 
 def semantic_chunk(
     text: str,

@@ -3,13 +3,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-
 class Startup(BaseModel):
-    """Normalized startup record used across scrapers and the ingest pipeline.
-
-    ``normalized_name`` is the stable deduplication key for the same startup.
-    The model is frozen so that hashing by ``normalized_name`` is safe.
-    """
+    
 
     model_config = {"frozen": True}
 

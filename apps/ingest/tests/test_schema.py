@@ -2,7 +2,6 @@ from datetime import datetime
 
 from src.schema import Startup
 
-
 def test_startup_normalization():
     s = Startup(
         name="OlA Electrics Scooter",
@@ -15,7 +14,6 @@ def test_startup_normalization():
     )
 
     assert s.normalized_name == "olaelectric"
-
 
 def test_startup_by_name():
     a = Startup(
