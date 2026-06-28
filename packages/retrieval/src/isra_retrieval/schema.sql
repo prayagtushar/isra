@@ -30,6 +30,15 @@ CREATE TABLE IF NOT EXISTS chunks (
     UNIQUE (startup_id, chunk_index)
 );
 
+CREATE TABLE IF NOT EXISTS feedback (
+    id SERIAL PRIMARY KEY,
+    query TEXT NOT NULL,
+    answer TEXT,
+    thumbs BOOLEAN NOT NULL,
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_chunks_embedding
     ON chunks USING hnsw (embedding vector_cosine_ops);
 

@@ -14,7 +14,6 @@ ORDER BY distance
 LIMIT %s
 """
 
-
 def vector_search(conn: Connection, query: np.ndarray, top_k: int = 10) -> List[Chunk]:
     with conn.cursor() as cur:
         cur.execute(SQL, (query.tolist(), top_k))

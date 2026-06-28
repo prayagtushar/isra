@@ -10,7 +10,6 @@ from isra_retrieval.vector_search import vector_search
 
 RETRIEVAL_MODES = {"vector", "hybrid", "hybrid+rerank"}
 
-
 def retrieve(
     query: str,
     top_k: int = 5,
