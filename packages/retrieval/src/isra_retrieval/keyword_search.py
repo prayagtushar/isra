@@ -4,7 +4,6 @@ from typing import List
 from psycopg import Connection
 from isra_retrieval.models import Chunk
 
-
 def _to_tsquery(query : str) -> str:
     terms = [t for t in re.split(r"\W+", query.lower()) if t and len(t) > 2]
     return " & ".join(terms)

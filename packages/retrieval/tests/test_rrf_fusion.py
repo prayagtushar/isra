@@ -1,7 +1,6 @@
 from isra_retrieval.models import Chunk
 from isra_retrieval.rrf_fusion import rrf_fusion
 
-
 def _chunk(chunk_id: int) -> Chunk:
     return Chunk(
         id=chunk_id,
@@ -12,10 +11,8 @@ def _chunk(chunk_id: int) -> Chunk:
         source_url="https://example.com",
     )
 
-
 def test_rrf_fusion_with_empty_inputs():
     assert rrf_fusion([], [], top_k=5) == []
-
 
 def test_rrf_fusion_prefers_chunks_in_both_lists():
     vector_results = [_chunk(10), _chunk(20), _chunk(30)]
@@ -27,7 +24,6 @@ def test_rrf_fusion_prefers_chunks_in_both_lists():
     for chunk in fused:
         assert isinstance(chunk.score, float)
         assert chunk.score > 0
-
 
 def test_rrf_fusion_top_k_truncates():
     vector_results = [_chunk(1)]

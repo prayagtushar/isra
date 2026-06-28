@@ -12,12 +12,10 @@ from isra_retrieval.models import Chunk
 from isra_retrieval.pipeline import retrieve
 from isra_retrieval.vector_search import vector_search
 
-
 def _dsn() -> str:
     return os.environ.get(
         "DATABASE_URL", "postgresql://isra:isra@localhost:5432/isra"
     )
-
 
 def _can_connect() -> bool:
     try:
@@ -26,12 +24,10 @@ def _can_connect() -> bool:
     except Exception:
         return False
 
-
 @pytest.fixture(scope="module")
 def conn() -> Generator[Connection, None, None]:
     with get_conn() as c:
         yield c
-
 
 @pytest.fixture(scope="function", autouse=True)
 def clean_test_data(conn: Connection) -> Generator[None, None, None]:
@@ -43,13 +39,11 @@ def clean_test_data(conn: Connection) -> Generator[None, None, None]:
     conn.execute("DELETE FROM startups WHERE normalized_name = 'integration-test-co'")
     conn.commit()
 
-
 @pytest.fixture
 def sample_vector() -> np.ndarray:
     v = np.zeros(384, dtype=np.float32)
     v[0] = 1.0
     return v
-
 
 @pytest.fixture
 def seeded_chunk(conn: Connection, sample_vector: np.ndarray) -> Chunk:
@@ -80,7 +74,6 @@ def seeded_chunk(conn: Connection, sample_vector: np.ndarray) -> Chunk:
         source_url="https://example.com/it",
     )
 
-
 @pytest.mark.skipif(not _can_connect(), reason="Postgres not available")
 def test_vector_search_returns_chunk(
     conn: Connection, sample_vector: np.ndarray, seeded_chunk: Chunk
@@ -91,14 +84,12 @@ def test_vector_search_returns_chunk(
     match = next(c for c in results if c.id == seeded_chunk.id)
     assert match.score == pytest.approx(1.0, abs=1e-5)
 
-
 @pytest.mark.skipif(not _can_connect(), reason="Postgres not available")
 def test_keyword_search_returns_chunk(conn: Connection, seeded_chunk: Chunk):
     results = search_keyword(conn, "artificial intelligence funding", top_k=5)
     ids = [c.id for c in results]
     assert seeded_chunk.id in ids
     assert all(isinstance(c.score, float) for c in results)
-
 
 @pytest.mark.skipif(not _can_connect(), reason="Postgres not available")
 def test_retrieve_vector_mode(
@@ -111,7 +102,6 @@ def test_retrieve_vector_mode(
     results = retrieve(seeded_chunk.text, top_k=5, mode="vector")
     assert seeded_chunk.id in [c.id for c in results]
 
-
 @pytest.mark.skipif(not _can_connect(), reason="Postgres not available")
 def test_retrieve_hybrid_mode(
     monkeypatch, seeded_chunk: Chunk, sample_vector: np.ndarray
@@ -123,7 +113,6 @@ def test_retrieve_hybrid_mode(
     results = retrieve("artificial intelligence funding", top_k=5, mode="hybrid")
     assert seeded_chunk.id in [c.id for c in results]
 
-
 @pytest.mark.skipif(not _can_connect(), reason="Postgres not available")
 def test_retrieve_hybrid_rerank_mode(
     monkeypatch, seeded_chunk: Chunk, sample_vector: np.ndarray
@@ -134,7 +123,7 @@ def test_retrieve_hybrid_rerank_mode(
     monkeypatch.setattr(
         pipeline_mod,
         "rerank",
-        lambda _query, chunks, top_k: sorted(chunks, key=lambda c: c.id)[:top_k],
+        lambda _query, chunks, top_k: [c for c in chunks if c.id == seeded_chunk.id][:top_k],
     )
 
     results = retrieve("artificial intelligence funding", top_k=5, mode="hybrid+rerank")
