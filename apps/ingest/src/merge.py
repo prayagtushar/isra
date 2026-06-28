@@ -1,30 +1,30 @@
 from typing import List
+
 from src.schema import Startup
 
-
 def merge_startups(startups: List[Startup]) -> List[Startup]:
-
-    merged_results: dict[str, Startup] = {}
+    
+    merged: dict[str, Startup] = {}
     for s in startups:
         key = s.normalized_name
-        if key not in merged_results:
-            merged_results[key] = s
-        else:
-            exisitng = merged_results[key]
-            merged_results[key] = exisitng.model_copy(
-                update={
-                    "description": (
-                        s.description
-                        if len(s.description) > len(exisitng.description)
-                        else exisitng.description
-                    ),
-                    "tags": list(set(exisitng.tags) | set(s.tags)),
-                    "sectors": list(set(exisitng.sectors) | set(s.sectors)),
-                    "founders": list(set(exisitng.founders) | set(s.founders)),
-                    "fundings": set(exisitng.fundings) or set(s.fundings),
-                    "founded_year": set(exisitng.founded_year) or set(s.founded_year),
-                    "headquarters": set(exisitng.headquarters) or set(s.headquarters),
-                    "one_liner": set(exisitng.one_liner) or set(s.one_liner),
-                }
-            )
-    return list(merged_results.values())
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = s
+            continue
+        merged[key] = existing.model_copy(
+            update={
+                "description": (
+                    s.description
+                    if len(s.description) > len(existing.description)
+                    else existing.description
+                ),
+                "tags": list(set(existing.tags) | set(s.tags)),
+                "sectors": list(set(existing.sectors) | set(s.sectors)),
+                "founders": list(set(existing.founders) | set(s.founders)),
+                "fundings": existing.fundings or s.fundings,
+                "founded_year": existing.founded_year or s.founded_year,
+                "headquarters": existing.headquarters or s.headquarters,
+                "one_liner": existing.one_liner or s.one_liner,
+            }
+        )
+    return list(merged.values())

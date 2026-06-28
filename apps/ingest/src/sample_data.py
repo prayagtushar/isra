@@ -2,7 +2,6 @@ from datetime import datetime
 
 from src.schema import Startup
 
-
 def sample_startups() -> list[Startup]:
     return [
         Startup(

@@ -1,6 +1,5 @@
 from typing import List
 
-
 import numpy as np
 import psycopg
 
@@ -43,7 +42,6 @@ ON CONFLICT (startup_id,chunk_index) DO UPDATE SET
     text = EXCLUDED.text,
     embedding = EXCLUDED.embedding
 """
-
 
 def load_startups_and_chunks(
     conn: psycopg.Connection,
