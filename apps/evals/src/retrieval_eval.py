@@ -5,7 +5,6 @@ from isra_retrieval import retrieve as _default_retrieve
 
 from src.golden import GoldenItem, matches
 
-
 @dataclass
 class ModeResult:
     mode: str
@@ -13,13 +12,11 @@ class ModeResult:
     mrr: float
     n: int
 
-
 def _reciprocal_rank(item: GoldenItem, chunks: Sequence) -> float:
     for rank, chunk in enumerate(chunks, start=1):
         if matches(item.expected, chunk.startup_name):
             return 1.0 / rank
     return 0.0
-
 
 def evaluate_modes(
     items: Sequence[GoldenItem],

@@ -1,16 +1,4 @@
-"""Entry point for `python -m src` (a.k.a. `bun run eval`).
 
-Compares retrieval modes (hit@k / MRR) on the golden set and, unless
---no-generation is passed, scores generation quality with a reference-free
-LLM-judge. Writes EVALUATION.md (+ evaluation.json sidecar).
-
-Flags:
-  --limit N          evaluate only the first N golden items
-  --no-generation    retrieval comparison only (no LLM calls, no key needed)
-  --modes a,b,c      retrieval modes to compare (default: all three)
-  --top-k K          retrieval depth (default: 5)
-  --out PATH         report path (default: repo-root EVALUATION.md)
-"""
 
 import argparse
 import asyncio
@@ -30,7 +18,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_MODES = ["vector", "hybrid", "hybrid+rerank"]
 _GEN_MODE = "hybrid+rerank"
 
-
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="evals")
     p.add_argument("--limit", type=int, default=None)
@@ -39,7 +26,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--out", type=str, default=str(_REPO_ROOT / "EVALUATION.md"))
     return p.parse_args(argv)
-
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
@@ -55,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Evaluating {len(items)} questions across modes: {', '.join(modes)} ...")
     try:
         mode_results = evaluate_modes(items, modes, top_k=args.top_k)
-    except Exception as exc:  # pragma: no cover - exercised at verification time
+    except Exception as exc:  
         print(
             f"Retrieval failed: {exc}\n"
             "Is Postgres running? Try: docker compose -f infra/compose.yml up -d",
@@ -103,7 +89,6 @@ def main(argv: list[str] | None = None) -> int:
     out = write_report(Path(args.out), meta, mode_results, gen)
     print(f"Wrote {out}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

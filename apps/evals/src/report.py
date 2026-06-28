@@ -10,10 +10,8 @@ _GEN_METRICS = [
     ("context_precision", "Context Precision"),
 ]
 
-
 def _fmt(x: float | None) -> str:
     return f"{x:.3f}" if x is not None else "n/a"
-
 
 def render_markdown(
     meta: dict, mode_results: list[ModeResult], gen: GenerationReport | None
@@ -52,7 +50,6 @@ def render_markdown(
     lines.append("")
     return "\n".join(lines)
 
-
 def build_json(
     meta: dict, mode_results: list[ModeResult], gen: GenerationReport | None
 ) -> dict:
@@ -81,7 +78,6 @@ def build_json(
             ],
         }
     return out
-
 
 def write_report(
     out_path: Path,

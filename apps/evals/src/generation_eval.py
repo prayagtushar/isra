@@ -12,10 +12,8 @@ SYSTEM_PROMPT = (
     "If the context does not contain the answer, say you don't know."
 )
 
-
 def _format_contexts(chunks: Sequence) -> list[str]:
     return [f"{c.text} (from {c.source_url})" for c in chunks]
-
 
 async def generate_answer(client, model: str, question: str, chunks: Sequence) -> str:
     numbered = "\n".join(
@@ -33,10 +31,8 @@ async def generate_answer(client, model: str, question: str, chunks: Sequence) -
     )
     return resp.choices[0].message.content or ""
 
-
 def _numbered(contexts: Sequence[str]) -> str:
     return "\n".join(f"[{i + 1}] {c}" for i, c in enumerate(contexts))
-
 
 def faithfulness_prompt(answer: str, contexts: Sequence[str]) -> str:
     return (
@@ -48,7 +44,6 @@ def faithfulness_prompt(answer: str, contexts: Sequence[str]) -> str:
         'Respond with JSON only: {"score": <float 0..1>, "reason": "<short>"}'
     )
 
-
 def answer_relevancy_prompt(question: str, answer: str) -> str:
     return (
         "You are grading whether an ANSWER directly addresses the QUESTION.\n"
@@ -58,7 +53,6 @@ def answer_relevancy_prompt(question: str, answer: str) -> str:
         f"ANSWER:\n{answer}\n\n"
         'Respond with JSON only: {"score": <float 0..1>, "reason": "<short>"}'
     )
-
 
 def context_precision_prompt(question: str, contexts: Sequence[str]) -> str:
     return (
@@ -70,7 +64,6 @@ def context_precision_prompt(question: str, contexts: Sequence[str]) -> str:
         'Respond with JSON only: {"score": <float 0..1>, "reason": "<short>"}'
     )
 
-
 @dataclass
 class ItemScore:
     question: str
@@ -78,7 +71,6 @@ class ItemScore:
     faithfulness: float | None
     answer_relevancy: float | None
     context_precision: float | None
-
 
 @dataclass
 class GenerationReport:
@@ -92,7 +84,6 @@ class GenerationReport:
     def coverage(self, metric: str) -> tuple[int, int]:
         scored = sum(1 for i in self.items if getattr(i, metric) is not None)
         return scored, len(self.items)
-
 
 async def evaluate_generation(
     items: Sequence[GoldenItem],

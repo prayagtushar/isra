@@ -5,13 +5,11 @@ from openai import AsyncOpenAI
 
 from src.config import settings
 
-
 class Judge(Protocol):
     async def complete(self, prompt: str) -> str: ...
 
-
 class OpenRouterJudge:
-    """LLM-judge backed by OpenRouter via the OpenAI-compatible API."""
+    
 
     def __init__(self, client: AsyncOpenAI | None = None, model: str | None = None):
         self._client = client or AsyncOpenAI(
@@ -29,9 +27,8 @@ class OpenRouterJudge:
         )
         return resp.choices[0].message.content or ""
 
-
 def _extract_score(text: str) -> float | None:
-    """Pull the first {...} JSON object out of a judge reply and read `score`."""
+    
     try:
         start = text.index("{")
         end = text.rindex("}") + 1
@@ -42,7 +39,6 @@ def _extract_score(text: str) -> float | None:
     if isinstance(score, bool) or not isinstance(score, (int, float)):
         return None
     return max(0.0, min(1.0, float(score)))
-
 
 async def score_with_judge(judge: Judge, prompt: str) -> float | None:
     try:
