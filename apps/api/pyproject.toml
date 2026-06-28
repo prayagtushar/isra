@@ -11,6 +11,10 @@ dependencies = [
     "pgvector",
     "sentence-transformers",
     "numpy",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1",
+    "openrouter>=0.10.0",
 ]
 
 [build-system]
