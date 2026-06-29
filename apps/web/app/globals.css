@@ -1,50 +1,159 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --base: #fbfbfa; 
+  --panel: #ffffff; 
+  --panel-2: #f3f3f1; 
+  --ink: #141413; 
+  --muted: #6e6e69; 
+  --faint: #a3a39d; 
+  --line: rgb(20 20 18 / 0.09); 
+  --line-strong: rgb(20 20 18 / 0.16);
+  --focus: #141413; 
+
+  --shadow-panel: 0 1px 2px rgb(20 20 18 / 0.04), 0 1px 1px rgb(20 20 18 / 0.03);
 }
 
-@media (prefers-color-scheme: dark) {
+.dark {
+  --base: #0a0a0a;
+  --panel: #131312;
+  --panel-2: #1c1c1a;
+  --ink: #f4f4f1;
+  --muted: #9a9a93;
+  --faint: #6b6b64;
+  --line: rgb(255 255 255 / 0.10);
+  --line-strong: rgb(255 255 255 / 0.20);
+  --focus: #f4f4f1;
+
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
+@theme inline {
+  --color-base: var(--base);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-focus: var(--focus);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+
+  --radius-card: 0.75rem;
+  --radius-input: 1rem;
+}
+
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: light;
   }
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.imgDark {
-  display: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
+  .dark {
     color-scheme: dark;
   }
 
-  .imgLight {
-    display: none;
+  *,
+  ::after,
+  ::before {
+    border-color: var(--line);
   }
-  .imgDark {
-    display: unset;
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--base);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--ink);
+    color: var(--base);
+  }
+
+  
+  .label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem; 
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 500;
+  }
+
+  
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--line-strong);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@keyframes token-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-token-in {
+  animation: token-in 0.18s ease-out both;
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.1s ease-in-out infinite;
+}
+.animate-rise-in {
+  animation: rise-in 0.24s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
