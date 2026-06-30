@@ -11,8 +11,8 @@ import type { IngestStage } from "@/lib/types";
 type Status = "pending" | "running" | "done";
 
 const STAGES: { key: IngestStage; label: string }[] = [
-  { key: "discover", label: "Discover Indian unicorns" },
-  { key: "scrape", label: "Scrape Wikipedia" },
+  { key: "discover", label: "Discover companies" },
+  { key: "scrape", label: "Scrape sources" },
   { key: "embed", label: "Embed chunks" },
   { key: "load", label: "Load into Postgres" },
 ];
@@ -101,8 +101,8 @@ export function IngestView() {
         <div className="mx-auto w-full max-w-3xl px-4 py-4">
           <p className="label mb-1">Data pipeline</p>
           <p className="text-[13px] leading-relaxed text-muted">
-            Rebuild the corpus straight from the web: discover Indian unicorns on
-            Wikipedia, scrape and enrich each, embed, and load into Postgres —
+            Rebuild the corpus straight from the web: pull Indian startups from
+            Wikipedia and Y Combinator, embed each, and load into Postgres —
             no terminal required.
           </p>
         </div>
@@ -113,7 +113,7 @@ export function IngestView() {
           <div className="flex items-center gap-2">
             <Button variant="primary" onClick={start} disabled={running} className="gap-2">
               {running ? <Spinner /> : <RefreshCw size={14} />}
-              {running ? "Ingesting…" : "Refresh from Wikipedia"}
+              {running ? "Ingesting…" : "Refresh data"}
             </Button>
             {running && (
               <Button variant="ghost" onClick={stop}>

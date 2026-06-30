@@ -12,9 +12,13 @@ from src.loader import load_startups_and_chunks
 from src.merge import merge_startups
 from src.sample_data import sample_startups
 from src.scraper import scrape_startups
+from src.yc_scraper import scrape_yc_startups
 from src.schema import Startup
 
 CACHE_PATH = Path("data/cache/startups.jsonl")
+
+# Default number of YC companies to pull (Wikipedia uses the caller's `limit`).
+YC_DEFAULT_LIMIT = 50
 
 load_dotenv()
 
@@ -37,6 +41,23 @@ def _emit(progress: bool, event: dict) -> None:
     if progress:
         print(json.dumps(event), flush=True)
 
+def _scrape_all(limit: int | None) -> List[Startup]:
+    """Scrape every source and concatenate (dedup happens later via merge)."""
+    scraped: List[Startup] = []
+
+    try:
+        scraped += scrape_startups(limit=limit)            # Wikipedia unicorns
+    except Exception as exc:
+        print(f"wikipedia scrape failed: {exc}")
+
+    try:
+        yc_limit = limit if limit is not None else YC_DEFAULT_LIMIT
+        scraped += scrape_yc_startups(limit=yc_limit)      # YC India companies
+    except Exception as exc:
+        print(f"yc scrape failed: {exc}")
+
+    return scraped
+
 def run_ingest(
     use_cache: bool = True,
     chunker: str = "naive",
@@ -56,17 +77,13 @@ def run_ingest(
     _emit(progress, {"type": "stage", "stage": "discover", "status": "done",
                      "count": len(startup_cache), "cached": cached})
 
-    # scrape: pull Indian unicorns from Wikipedia (falls back to sample data)
+    # scrape: pull from all sources (Wikipedia + YC); fall back to sample data
     _emit(progress, {"type": "stage", "stage": "scrape", "status": "start"})
     if not startup_cache:
-        try:
-            startup_cache = scrape_startups(limit=limit)
-        except Exception as exc:
-            print(f"scrape failed, falling back to sample data: {exc}")
-            startup_cache = []
-        if not startup_cache:
-            startup_cache = sample_startups()
-        startup_cache = merge_startups(startup_cache)
+        scraped = _scrape_all(limit)
+        if not scraped:
+            scraped = sample_startups()
+        startup_cache = merge_startups(scraped)   # dedupe across sources by normalized_name
         _save_cache(startup_cache)
     _emit(progress, {"type": "stage", "stage": "scrape", "status": "done",
                      "count": len(startup_cache), "cached": cached})
