@@ -11,6 +11,7 @@ from src.embedder import embed_text
 from src.loader import load_startups_and_chunks
 from src.merge import merge_startups
 from src.sample_data import sample_startups
+from src.scraper import scrape_startups
 from src.schema import Startup
 
 CACHE_PATH = Path("data/cache/startups.jsonl")
@@ -32,29 +33,61 @@ def _save_cache(startups: List[Startup]) -> None:
 
 _CHUNKERS = {"naive": naive_chunk, "semantic": semantic_chunk}
 
-def run_ingest(use_cache: bool = True, chunker: str = "naive") -> None:
+def _emit(progress: bool, event: dict) -> None:
+    if progress:
+        print(json.dumps(event), flush=True)
+
+def run_ingest(
+    use_cache: bool = True,
+    chunker: str = "naive",
+    progress: bool = False,
+    limit: int | None = None,
+) -> None:
     if chunker not in _CHUNKERS:
         raise ValueError(f"Unknown chunker: {chunker}. Choose from {list(_CHUNKERS)}")
 
     startup_cache: List[Startup] = []
 
+    # discover: load any cached corpus
+    _emit(progress, {"type": "stage", "stage": "discover", "status": "start"})
     if use_cache:
         startup_cache = _load_cache()
+    cached = bool(startup_cache)
+    _emit(progress, {"type": "stage", "stage": "discover", "status": "done",
+                     "count": len(startup_cache), "cached": cached})
 
+    # scrape: pull Indian unicorns from Wikipedia (falls back to sample data)
+    _emit(progress, {"type": "stage", "stage": "scrape", "status": "start"})
     if not startup_cache:
-        startup_cache = sample_startups()
+        try:
+            startup_cache = scrape_startups(limit=limit)
+        except Exception as exc:
+            print(f"scrape failed, falling back to sample data: {exc}")
+            startup_cache = []
+        if not startup_cache:
+            startup_cache = sample_startups()
         startup_cache = merge_startups(startup_cache)
         _save_cache(startup_cache)
+    _emit(progress, {"type": "stage", "stage": "scrape", "status": "done",
+                     "count": len(startup_cache), "cached": cached})
 
+    # embed: chunk + encode
+    _emit(progress, {"type": "stage", "stage": "embed", "status": "start"})
     chunk_fn = _CHUNKERS[chunker]
     chunks = []
     for s in startup_cache:
         chunks.extend(chunk_fn(s.description, str(s.source_url), s.normalized_name))
 
     embeddings = embed_text([c.text for c in chunks])
+    _emit(progress, {"type": "stage", "stage": "embed", "status": "done", "chunks": len(chunks)})
 
+    # load: upsert into Postgres
+    _emit(progress, {"type": "stage", "stage": "load", "status": "start"})
     url = os.environ.get("DATABASE_URL")
-    with psycopg.connect(url) as conn:
+    # prepare_threshold=None for transaction-mode pooler compatibility (Supabase 6543).
+    with psycopg.connect(url, prepare_threshold=None) as conn:
         load_startups_and_chunks(conn, startup_cache, chunks, embeddings)
+    _emit(progress, {"type": "stage", "stage": "load", "status": "done"})
 
+    _emit(progress, {"type": "done", "startups": len(startup_cache), "chunks": len(chunks)})
     print(f"Loaded {len(startup_cache)} startups and {len(chunks)} chunks.")

@@ -1,0 +1,42 @@
+# Controls what `gcloud builds submit` uploads as the build context.
+# Keep this in sync with .dockerignore — exclude everything the API image
+# build does not need, so the upload stays small.
+
+.git
+.gitignore
+.github
+.claude
+.remember
+.turbo
+
+# Python virtualenvs / caches (rebuilt inside the image)
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+
+# JS — not needed for the Python API image
+node_modules
+**/node_modules
+apps/web
+bun.lock
+
+# Data, build outputs, notebooks, docs
+data
+dist
+**/dist
+**/.next
+notebooks
+docs
+
+# Local env / secrets — never upload these
+.env
+**/.env
+.env.*
+**/.env.*
+
+# Misc
+*.log
+.DS_Store

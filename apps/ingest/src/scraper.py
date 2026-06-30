@@ -26,6 +26,7 @@ class UnicornRecord:
 
 def _clean(value: str) -> str:
     value = _CITATION.sub("", value)
+    value = re.sub(r"\s+", " ", value)
     value = re.sub(r"\s+,", ",", value)
     value = re.sub(r",\s+", ", ", value)
     return value.strip(" ,;")
@@ -45,35 +46,41 @@ def _parse_valuation(value: str) -> float | None:
         return None
 
 def parse_unicorn_table(html: str) -> list[UnicornRecord]:
+    """Extract Indian unicorn rows from the Wikipedia page.
+
+    The page has several `wikitable`s (count-over-time, by-country, the main
+    per-company list, and an exited-unicorns list). We scan every table and
+    keep rows shaped like the per-company list (>= 6 cells, country in col 5).
+    """
     soup = BeautifulSoup(html, "lxml")
-    table = soup.find("table", {"class": "wikitable"})
-    if not table:
-        return []
-
-    rows = table.find_all("tr")
-    if len(rows) < 2:
-        return []
-
     records: list[UnicornRecord] = []
-    for row in rows[1:]:
-        cells = row.find_all(["td", "th"])
-        if len(cells) < 6:
+
+    for table in soup.find_all("table", {"class": "wikitable"}):
+        rows = table.find_all("tr")
+        if len(rows) < 2:
             continue
 
-        country = _clean(cells[4].get_text())
-        if "india" not in country.lower():
-            continue
+        for row in rows[1:]:
+            cells = row.find_all(["td", "th"])
+            if len(cells) < 6:
+                continue
 
-        name_cell = cells[0]
-        link = name_cell.find("a")
-        name = _clean(name_cell.get_text())
-        slug = link["href"].split("/wiki/")[-1] if link and link.get("href") else None
+            country = _clean(cells[4].get_text())
+            if "india" not in country.lower():
+                continue
 
-        valuation = _parse_valuation(cells[1].get_text())
-        sectors = _split_multi(cells[3].get_text())
-        founders = _split_multi(cells[5].get_text()) or ["Unknown"]
+            name_cell = cells[0]
+            link = name_cell.find("a")
+            name = _clean(name_cell.get_text())
+            if not name:
+                continue
+            slug = link["href"].split("/wiki/")[-1] if link and link.get("href") else None
 
-        records.append(UnicornRecord(name=name, slug=slug, valuation=valuation, sectors=sectors, founders=founders))
+            valuation = _parse_valuation(cells[1].get_text())
+            sectors = _split_multi(cells[3].get_text())
+            founders = _split_multi(cells[5].get_text()) or ["Unknown"]
+
+            records.append(UnicornRecord(name=name, slug=slug, valuation=valuation, sectors=sectors, founders=founders))
 
     return records
 
@@ -172,6 +179,41 @@ def scrape_wikipedia(startup_slug: str, startup_name: str) -> Startup:
         founders=["Unknown"],
         scraped_date=datetime.now(),
     )
+
+def scrape_startups(limit: int | None = None, fetch_articles: bool = True) -> list[Startup]:
+    """Scrape Indian unicorns from the Wikipedia list (richest valuations first).
+
+    Fetches the list page once, parses the per-company table, dedupes by name,
+    and (optionally) fetches each company's article for a real description.
+    Article fetches are best-effort: failures fall back to a generated blurb.
+    """
+    records = parse_unicorn_table(_fetch(_LIST_URL))
+
+    seen: set[str] = set()
+    unique: list[UnicornRecord] = []
+    for record in records:
+        key = record.name.lower()
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(record)
+
+    if limit is not None:
+        unique = unique[:limit]
+
+    startups: list[Startup] = []
+    for record in unique:
+        article_html = None
+        if fetch_articles and record.slug:
+            try:
+                article_html = _fetch(f"https://en.wikipedia.org/wiki/{record.slug}")
+            except Exception as exc:
+                print(f"article fetch failed for {record.name}: {exc}")
+        try:
+            startups.append(build_startup(record, article_html))
+        except Exception as exc:
+            print(f"skip {record.name}: {exc}")
+
+    return startups
 
 def seed_details() -> list[Startup]:
     slugs = [

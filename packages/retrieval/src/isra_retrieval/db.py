@@ -17,7 +17,7 @@ def get_dsn() -> str:
 
 @contextmanager
 def get_conn() -> Generator[Connection, None, None]:
-    conn = psycopg.connect(get_dsn())
+    conn = psycopg.connect(get_dsn(), prepare_threshold=None)
     try:
         register_vector(conn)
         yield conn
