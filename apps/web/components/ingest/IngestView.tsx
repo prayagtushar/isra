@@ -121,7 +121,7 @@ export function IngestView() {
               </Button>
             )}
             <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
-              ~58 companies · ≈1 min
+              ~110 companies · ≈1–2 min
             </span>
           </div>
 

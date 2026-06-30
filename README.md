@@ -66,7 +66,7 @@ Key design decisions:
 ### Data flow
 
 1. **Ingest** (`apps/ingest`)
-   - Wikipedia list of unicorn startup companies is scraped and filtered to Indian startups.
+   - Indian startups are scraped from two sources — Wikipedia's unicorn list and Y Combinator's company directory (filtered to India) — and merged.
    - Records validate into the `Startup` Pydantic model and are deduplicated by `normalized_name`.
    - Descriptions are chunked using either naive or semantic chunking.
    - Each chunk is embedded with `BAAI/bge-small-en-v1.5` and loaded into Postgres.
