@@ -1,0 +1,9 @@
+export { Navbar } from "./Navbar";
+export { Hero } from "./Hero";
+export { Stats } from "./Stats";
+export { Marquee } from "./Marquee";
+export { Features } from "./Features";
+export { Bento } from "./Bento";
+export { FAQ } from "./FAQ";
+export { CTA } from "./CTA";
+export { Footer } from "./Footer";
