@@ -146,7 +146,11 @@ scratch/
 
 # --- Agent-generated plans and internal docs (keep local only) ---
 docs/
+AGENTS.md
+EVALUATION.md
+README.md
+apps/web/README.md
 
-# --- evals: keep EVALUATION.md tracked, ignore the regenerated JSON sidecar ---
+# --- evals: ignore the regenerated JSON sidecar ---
 evaluation.json
 apps/evals/evaluation.json
