@@ -1,0 +1,12 @@
+{"question": "Which Indian startup builds electric scooters?", "expected": "olaelectric"}
+{"question": "What does PharmEasy do?", "expected": "pharmeasy"}
+{"question": "Which company runs UPI payments and a mobile wallet?", "expected": "paytm"}
+{"question": "Where can I order food online in India?", "expected": "zomato"}
+{"question": "Which Indian fintech is known for its payment gateway for businesses?", "expected": "razorpay"}
+{"question": "Which platform is popular for stock trading and investing in India?", "expected": "zerodha"}
+{"question": "Which Indian startup offers a credit-card bill payment and rewards app?", "expected": "cred"}
+{"question": "Which company runs a budget hotel booking network?", "expected": "oyo"}
+{"question": "Which Indian startup is a fantasy sports platform?", "expected": "dream11"}
+{"question": "Which Indian startup makes a popular API development and testing platform?", "expected": "postman"}
+{"question": "Which company lets people rent or buy homes directly without paying broker commission?", "expected": "nobroker"}
+{"question": "Which Indian startup provides a cloud platform for testing websites across browsers?", "expected": "browserstack"}

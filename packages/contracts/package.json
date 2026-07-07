@@ -1,0 +1,16 @@
+{
+  "name": "@isra/contracts",
+  "private": true,
+  "main": "./src/types.ts",
+  "types": "./src/types.ts",
+  "scripts": {
+    "gen": "openapi-typescript http://localhost:8000/openapi.json -o src/types.ts",
+    "dev": "echo 'Contracts package has no dev server'",
+    "build": "echo 'No build step for contracts package'",
+    "lint": "echo 'No lint step for contracts package'",
+    "test": "echo 'No tests for contracts package'"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7"
+  }
+}

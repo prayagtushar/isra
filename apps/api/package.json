@@ -1,0 +1,11 @@
+{
+  "name": "api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "uv run --directory . uvicorn src.main:app --reload --port ${API_PORT:-8000}",
+    "build": "echo 'No build step for Python API'",
+    "lint": "echo 'No lint step for Python API'",
+    "test": "uv run --directory . pytest"
+  }
+}
