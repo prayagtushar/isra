@@ -1,0 +1,22 @@
+[project]
+name = "isra"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["apps/api", "apps/ingest", "apps/evals", "packages/retrieval"]
+
+[tool.uv.sources]
+isra-retrieval = { workspace = true }
+isra-ingest = { workspace = true }
+isra-evals = { workspace = true }
+isra-api = { workspace = true }
+# On Linux (CI / Docker / Cloud Run) pull torch from the CPU-only wheel index so
+# the deployed image does not drag in the multi-GB CUDA stack. macOS dev boxes
+# keep resolving torch from PyPI (which ships CPU/MPS wheels) via the default.
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

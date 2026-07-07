@@ -1,0 +1,42 @@
+# Build context lives at the repo root. Keep it lean — only the uv workspace
+# Python packages are needed to build the API image.
+
+# VCS / tooling
+.git
+.gitignore
+.github
+.claude
+.remember
+.turbo
+
+# Python virtualenvs / caches (rebuilt inside the image)
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+
+# JS — not needed for the Python API image
+node_modules
+**/node_modules
+apps/web
+bun.lock
+
+# Data, build outputs, notebooks, docs
+data
+dist
+**/dist
+**/.next
+notebooks
+docs
+
+# Local env / secrets — never bake these into the image
+.env
+**/.env
+.env.*
+**/.env.*
+
+# Misc
+*.log
+.DS_Store
