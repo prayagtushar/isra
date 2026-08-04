@@ -1,6 +1,6 @@
 # Indian Startup Ecosystem RAG (ISRA)
 
-**[Try the live demo →](https://isra.prayagtushar.xyz/chat)**
+**[Try the live demo →](https://isra.prayagtushar.xyz/lab)** — the retrieval lab compares vector, hybrid and hybrid+rerank on the same query, no signup required. [`/search`](https://isra.prayagtushar.xyz/search) and [`/startups`](https://isra.prayagtushar.xyz/startups) are open too; [`/chat`](https://isra.prayagtushar.xyz/chat) asks for a free account because each answer spends LLM tokens.
 
 A production-ready, hand-rolled Retrieval-Augmented Generation (RAG) system over Indian startup data. It demonstrates a complete retrieval pipeline — vector search + Postgres full-text search → RRF fusion → BGE reranker — served through a streaming FastAPI backend and a Next.js chat UI.
 
@@ -91,6 +91,9 @@ Key design decisions:
    - `/chat` shows progressive sources, inline citations, and 👍/👎 feedback.
    - `/lab` compares retrieval modes side-by-side.
    - `/search` and `/startups` provide search-explorer and startup-browser views.
+   - `/lab`, `/search` and `/startups` are public: they only read, so they cost
+     nothing per request. `/chat` requires an account because every call spends
+     LLM tokens, and `/ingest` requires one because it writes.
 
 ### Monorepo layout
 
@@ -223,7 +226,8 @@ Generated: 2026-06-27 · questions: 12 · top_k: 5
 
 ### Recommended target architecture
 
-- **API:** GCP Cloud Run (ships the BGE models; image ~500 MB).
+- **API:** GCP Cloud Run (ships the BGE models; image ~1.5 GB compressed, 4 vCPU
+  so cross-encoder reranking returns in ~4.5s instead of ~20s).
 - **Web:** Vercel.
 - **Database:** Supabase Postgres with `pgvector` enabled.
 
