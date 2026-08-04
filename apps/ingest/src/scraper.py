@@ -45,6 +45,25 @@ def _parse_valuation(value: str) -> float | None:
     except ValueError:
         return None
 
+def _link_matches_name(name: str, slug: str, title: str) -> bool:
+    """Guard against list rows whose link points at a different company's
+    article (e.g. "Krutrim" linked to /wiki/Ola_Electric). The link target is
+    trusted only if the company name and the article name overlap: one
+    contains the other, or they share a token of >= 3 characters."""
+    def norm(value: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", value.lower())
+
+    name_n = norm(name)
+    for target in (norm(slug), norm(title)):
+        if not target:
+            continue
+        if name_n in target or target in name_n:
+            return True
+        for token in re.split(r"[^a-z0-9]+", name.lower()):
+            if len(token) >= 3 and token in target:
+                return True
+    return False
+
 def parse_unicorn_table(html: str) -> list[UnicornRecord]:
     """Extract Indian unicorn rows from the Wikipedia page.
 
@@ -75,6 +94,8 @@ def parse_unicorn_table(html: str) -> list[UnicornRecord]:
             if not name:
                 continue
             slug = link["href"].split("/wiki/")[-1] if link and link.get("href") else None
+            if slug and not _link_matches_name(name, slug, link.get("title", "")):
+                slug = None
 
             valuation = _parse_valuation(cells[1].get_text())
             sectors = _split_multi(cells[3].get_text())

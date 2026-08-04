@@ -1,5 +1,6 @@
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 from typing import List
 
@@ -93,7 +94,12 @@ def run_ingest(
     chunk_fn = _CHUNKERS[chunker]
     chunks = []
     for s in startup_cache:
-        chunks.extend(chunk_fn(s.description, str(s.source_url), s.normalized_name))
+        for c in chunk_fn(s.description, str(s.source_url), s.normalized_name):
+            # YC-style descriptions are first-person and never name the
+            # company, so name queries would miss both FTS and the embedding.
+            if s.name.lower() not in c.text.lower():
+                c = replace(c, text=f"{s.name}: {c.text}")
+            chunks.append(c)
 
     embeddings = embed_text([c.text for c in chunks])
     _emit(progress, {"type": "stage", "stage": "embed", "status": "done", "chunks": len(chunks)})

@@ -85,6 +85,46 @@ def test_parse_unicorn_table_filters_india_and_extracts_fields():
     assert razorpay.sectors == ["Fintech", "Payments"]
     assert razorpay.founders == ["Harshil Mathur", "Shashank Kumar"]
 
+MISMATCHED_LINK_HTML = """
+<table class="wikitable">
+  <tbody>
+    <tr><th>Company</th><th>Valuation (US$ billions)</th><th>Valuation date</th>
+        <th>Industry</th><th>Country/ countries</th><th>Founder(s)</th></tr>
+    <tr>
+      <td><a href="//en.wikipedia.org/wiki/Ola_Electric" title="Ola Electric">Krutrim</a></td>
+      <td>1+</td>
+      <td>26 January 2024</td>
+      <td><a href="/wiki/Artificial_intelligence">Artificial intelligence</a></td>
+      <td>India</td>
+      <td>Bhavish Aggarwal</td>
+    </tr>
+    <tr>
+      <td><a href="/wiki/Ola_Cabs" title="Ola Cabs">Ola Consumer</a></td>
+      <td>2.0</td>
+      <td>2024</td>
+      <td><a href="/wiki/Transport">Transport</a></td>
+      <td>India</td>
+      <td>Bhavish Aggarwal</td>
+    </tr>
+  </tbody>
+</table>
+"""
+
+def test_parse_unicorn_table_rejects_link_to_unrelated_article():
+    # Wikipedia's list sometimes links a company name to a *different*
+    # company's article (e.g. "Krutrim" -> /wiki/Ola_Electric). Enriching from
+    # that article contaminates the record, so the slug must be dropped —
+    # a stub description beats the wrong company's data.
+    records = parse_unicorn_table(MISMATCHED_LINK_HTML)
+    assert [r.name for r in records] == ["Krutrim", "Ola Consumer"]
+
+    krutrim, ola_consumer = records
+    assert krutrim.slug is None
+
+    # Partial overlaps are legitimate ("Ola Consumer" -> Ola_Cabs,
+    # "Oyo" -> Oyo_Rooms) and must survive the guard.
+    assert ola_consumer.slug == "Ola_Cabs"
+
 def test_parse_infobox():
     info = parse_infobox(ARTICLE_HTML)
     assert info["founded_year"] == 2012
