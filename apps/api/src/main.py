@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
@@ -33,17 +34,29 @@ from src.llm import stream_answer
 try:
     from langfuse import Langfuse
 
-    _langfuse = Langfuse(
-        public_key=settings.langfuse_public_key or None,
-        secret_key=settings.langfuse_secret_key or None,
-        host=settings.langfuse_host,
-    ) if (settings.langfuse_public_key and settings.langfuse_secret_key) else None
-    if _langfuse is not None and not hasattr(_langfuse, "trace"):
-        _langfuse = None
+    _langfuse = (
+        Langfuse(
+            public_key=settings.langfuse_public_key,
+            secret_key=settings.langfuse_secret_key,
+            host=settings.langfuse_host,
+        )
+        if (settings.langfuse_public_key and settings.langfuse_secret_key)
+        else None
+    )
 except Exception:
+    logging.getLogger(__name__).warning("Langfuse init failed; tracing disabled", exc_info=True)
     _langfuse = None
 
-app = FastAPI(title="Indian Startup Ecosystem RAG API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # Flush any buffered traces on shutdown (SIGTERM on Cloud Run, etc.).
+    if _langfuse:
+        _langfuse.flush()
+
+
+app = FastAPI(title="Indian Startup Ecosystem RAG API", lifespan=lifespan)
 
 # CORS: in production, set ISRA_CORS_ORIGINS to the deployed web domain(s).
 # Locally, allow everything. The Next.js proxy makes this mostly irrelevant,
@@ -88,28 +101,37 @@ class SearchResponse(BaseModel):
 
 @app.post("/search", response_model=SearchResponse)
 async def search(req: SearchRequest):
-    trace = None
+    span = None
     if _langfuse:
-        trace = _langfuse.trace(name="search", input={"query": req.query, "mode": req.mode})
-
-    chunks = await asyncio.to_thread(retrieve, req.query, req.top_k, req.mode)
-
-    results = [
-        SearchResult(
-            id=c.id,
-            startup_name=c.startup_name,
-            chunk_index=c.chunk_index,
-            text=c.text,
-            source_url=c.source_url,
-            score=c.score,
+        span = _langfuse.start_observation(
+            as_type="retriever",
+            name="search",
+            input={"query": req.query, "mode": req.mode},
         )
-        for c in chunks
-    ]
 
-    if trace:
-        trace.update(output={"results": [r.model_dump() for r in results]})
+    try:
+        chunks = await asyncio.to_thread(retrieve, req.query, req.top_k, req.mode)
 
-    return SearchResponse(query=req.query, results=results)
+        results = [
+            SearchResult(
+                id=c.id,
+                startup_name=c.startup_name,
+                chunk_index=c.chunk_index,
+                text=c.text,
+                source_url=c.source_url,
+                score=c.score,
+            )
+            for c in chunks
+        ]
+
+        if span:
+            # Root-observation output becomes the trace output automatically in v4.
+            span.update(output={"results": [r.model_dump() for r in results]})
+
+        return SearchResponse(query=req.query, results=results)
+    finally:
+        if span:
+            span.end()
 
 class HistoryTurn(BaseModel):
     role: Literal["user", "assistant"]
@@ -225,22 +247,31 @@ async def chat(req: ChatRequest):
     stream = _chat_stream(req.question, req.top_k, req.mode, history, req.trace)
 
     if _langfuse:
-        trace = _langfuse.trace(
-            name="chat", input={"question": req.question, "mode": req.mode, "history": history}
+        span = _langfuse.start_observation(
+            name="chat",
+            input={"question": req.question, "mode": req.mode, "history": history},
         )
+
+        # Bind the inner generator to its own name: `stream` is rebound to
+        # `_wrapped()` below, and the closure resolves it at call time, so
+        # iterating `stream` here would make the wrapper consume itself.
+        inner = stream
 
         async def _wrapped():
             answer = ""
-            async for event in stream:
-                yield event
-                try:
-                    data = json.loads(event.removeprefix("data: "))
-                except Exception:
-                    continue
-                if data.get("type") == "token":
-                    answer += data.get("content", "")
-                elif data.get("type") == "done":
-                    trace.update(output={"answer": answer, "citations": data.get("citations", [])})
+            try:
+                async for event in inner:
+                    yield event
+                    try:
+                        data = json.loads(event.removeprefix("data: "))
+                    except Exception:
+                        continue
+                    if data.get("type") == "token":
+                        answer += data.get("content", "")
+                    elif data.get("type") == "done":
+                        span.update(output={"answer": answer, "citations": data.get("citations", [])})
+            finally:
+                span.end()
 
         stream = _wrapped()
 
@@ -414,6 +445,16 @@ async def reset_password(req: ResetPasswordRequest):
     return {"id": user["id"], "email": user["email"]}
 
 
+def _ingest_env() -> dict[str, str]:
+    # The ingest subprocess reads plain DATABASE_URL, but deployed containers
+    # only receive ISRA_DATABASE_URL (Secret Manager) — map it explicitly.
+    return {
+        **os.environ,
+        "PYTHONPATH": str(_INGEST_DIR),
+        "DATABASE_URL": settings.database_url,
+    }
+
+
 async def _ingest_stream(limit: int | None, refresh: bool):
     global _ingest_running
     cmd = [sys.executable, "-m", "src", "--progress"]
@@ -421,7 +462,7 @@ async def _ingest_stream(limit: int | None, refresh: bool):
         cmd.append("--no-cache")
     if limit is not None:
         cmd += ["--limit", str(limit)]
-    env = {**os.environ, "PYTHONPATH": str(_INGEST_DIR)}
+    env = _ingest_env()
 
     proc = None
     try:

@@ -137,3 +137,58 @@ def test_chat_sse_trace():
     assert types == ["trace", "sources", "token", "done"]
     assert events[0]["trace"]["mode"] == "hybrid"
     assert events[0]["trace"]["stages"][0]["name"] == "vector"
+
+def test_ingest_env_sets_database_url_for_subprocess():
+    # In Cloud Run only ISRA_DATABASE_URL is set (via Secret Manager); the
+    # ingest subprocess reads plain DATABASE_URL, so the API must map it or
+    # web-triggered ingest dies with "DATABASE_URL is not set".
+    from src.main import _ingest_env
+
+    with patch.dict("os.environ", {}, clear=True):
+        env = _ingest_env()
+
+    assert env["DATABASE_URL"]
+    from src.config import settings
+
+    assert env["DATABASE_URL"] == settings.database_url
+    assert "PYTHONPATH" in env
+
+def test_chat_sse_streams_with_langfuse_tracing_enabled():
+    """Regression: the Langfuse wrapper must not consume itself.
+
+    `chat()` rebinds `stream` to the wrapper generator, and the closure
+    resolves that name at call time. Iterating `stream` inside the wrapper
+    therefore made the generator iterate itself, raising
+    `RuntimeError: anext(): asynchronous generator is already running`
+    on the first `__anext__` and returning an empty 200 response.
+
+    This forces `_langfuse` on so the traced path is always exercised, even
+    when no Langfuse credentials are configured in the environment.
+    """
+    chunk = _make_chunk(1, text="context", score=0.9)
+
+    async def _fake_stream(*_args, **_kwargs):
+        yield "hello"
+        yield " world"
+
+    fake_langfuse = MagicMock()
+    span = MagicMock()
+    fake_langfuse.start_observation.return_value = span
+
+    with patch("src.main._langfuse", fake_langfuse):
+        with patch("src.main.retrieve", return_value=[chunk]):
+            with patch("src.main.stream_answer", new=_fake_stream):
+                response = client.post(
+                    "/chat",
+                    json={"question": "hello", "top_k": 3, "mode": "hybrid"},
+                )
+
+    assert response.status_code == 200
+    events = _parse_sse(response)
+    assert [e["type"] for e in events] == ["sources", "token", "token", "done"]
+    assert events[-1]["answer"] == "hello world"
+
+    # The span is updated with the final answer and always closed.
+    span.update.assert_called_once()
+    assert span.update.call_args.kwargs["output"]["answer"] == "hello world"
+    span.end.assert_called_once()
