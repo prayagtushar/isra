@@ -27,7 +27,11 @@ echo "Deploying ${IMAGE} to Cloud Run service ${SERVICE} (${PROJECT_ID}/${REGION
 #   --max-instances 1        -> never more than one instance
 #   --concurrency 20         -> modest concurrent requests per instance
 #   --cpu-boost              -> faster cold start, no always-on cost
-#   --memory 2Gi --cpu 1     -> smallest size that can load the models
+#   --memory 4Gi --cpu 4     -> the BGE cross-encoder scores 20 query/chunk
+#                               pairs per rerank; on 1 vCPU that takes ~20s.
+#                               Cloud Run bills vCPU-seconds, so 4 vCPU for
+#                               ~5s costs the same as 1 vCPU for ~20s while
+#                               being 4x faster. Still scales to zero.
 #   --timeout 300            -> 5 min request ceiling
 #   --execution-environment gen2 -> required for CPU boost
 #
@@ -41,15 +45,15 @@ gcloud run deploy "${SERVICE}" \
   --allow-unauthenticated \
   --platform managed \
   --execution-environment gen2 \
-  --memory 2Gi \
-  --cpu 1 \
+  --memory 4Gi \
+  --cpu 4 \
   --cpu-boost \
   --min-instances 0 \
   --max-instances 1 \
   --concurrency 20 \
   --timeout 300 \
-  --set-env-vars 'ISRA_LLM_MODEL=anthropic/claude-haiku-4.5,ISRA_ENABLE_RETRIEVAL_TRACE=true' \
-  --set-secrets 'ISRA_DATABASE_URL=isra-database-url:latest,ISRA_OPENROUTER_API_KEY=isra-openrouter-key:latest' \
+  --set-env-vars 'ISRA_LLM_MODEL=anthropic/claude-haiku-4.5,ISRA_ENABLE_RETRIEVAL_TRACE=true,ISRA_LANGFUSE_HOST=https://us.cloud.langfuse.com,ISRA_LANGFUSE_PUBLIC_KEY=pk-lf-4a9d5d6c-96a2-45b4-84f0-bb61767f5987' \
+  --set-secrets 'ISRA_DATABASE_URL=isra-database-url:latest,ISRA_OPENROUTER_API_KEY=isra-openrouter-key:latest,ISRA_LANGFUSE_SECRET_KEY=isra-langfuse-secret:latest' \
   --no-use-http2 \
   --ingress all
 
