@@ -136,6 +136,9 @@ pnpm-lock.yaml
 # --- Local notes / scratch ---
 notes/
 
+# Points at a path inside the local journal checkout; meaningless to anyone else.
+RELATED.md
+
 # --- Private local guides / agent scratch / memory ---
 .local-guides/
 .remember/

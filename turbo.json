@@ -1,5 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "//": "Turborepo strips environment variables it was not told about, so a production web build fails with 'API_URL environment variable is required' unless they are declared here. Listing them also makes them part of the cache key, so changing one correctly invalidates a cached build.",
+  "globalEnv": [
+    "NODE_ENV",
+    "API_URL",
+    "ISRA_PROXY_SECRET",
+    "ISRA_ADMIN_KEY"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
