@@ -3,33 +3,25 @@ import json
 import logging
 import os
 import re
+import secrets
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from psycopg.rows import dict_row
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from isra_retrieval.pipeline import retrieve, retrieve_debug, RetrievalTrace
 from isra_retrieval.db import get_conn
 
-from src.auth import (
-    create_password_reset,
-    create_user,
-    get_user_by_email,
-    get_user_by_id,
-    hash_password,
-    update_password,
-    validate_reset_token,
-    verify_password,
-)
+from src.budget import DailyBudget
 from src.config import settings
-from src.email import send_reset_email
 from src.llm import stream_answer
+from src.rate_limit import _RULES, RateLimiter, resolve_client
 
 try:
     from langfuse import Langfuse
@@ -70,6 +62,64 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_rate_limiter = RateLimiter(rules=_RULES)
+
+# Cloud Run sits behind one Google front-end hop that appends to
+# X-Forwarded-For. Set to 0 when running the API with no proxy in front of it,
+# otherwise every caller is keyed on the proxy address instead of their own.
+_TRUSTED_PROXY_HOPS = int(os.environ.get("ISRA_TRUSTED_PROXY_HOPS", "1"))
+
+
+# Shared with the Next.js proxy so it can name the real caller. Unset means the
+# forwarded address is ignored, since it would otherwise be trivially spoofable.
+_PROXY_SECRET = os.environ.get("ISRA_PROXY_SECRET") or None
+
+# Guards the only write endpoint. Unset means /ingest is closed entirely.
+_ADMIN_KEY = os.environ.get("ISRA_ADMIN_KEY") or None
+
+# Total answers the open demo will generate per UTC day, across everyone. This
+# is the ceiling on LLM spend; set to 0 to stop answering without redeploying,
+# or to -1 to remove the cap.
+_daily_chat_budget = DailyBudget(
+    limit=int(os.environ.get("ISRA_DAILY_CHAT_LIMIT", "200"))
+)
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    caller = resolve_client(
+        proxy_client_ip=request.headers.get("x-isra-client-ip"),
+        proxy_secret_header=request.headers.get("x-isra-proxy-secret"),
+        proxy_secret=_PROXY_SECRET,
+        forwarded_for=request.headers.get("x-forwarded-for"),
+        peer=request.client.host if request.client else None,
+        trusted_hops=_TRUSTED_PROXY_HOPS,
+    )
+    decision = _rate_limiter.check(caller, request.url.path)
+    if not decision.allowed:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": (
+                    f"Rate limit exceeded: {decision.limit} requests per "
+                    f"{int(decision.window_seconds)}s. "
+                    f"Retry in {decision.retry_after}s."
+                )
+            },
+            headers={
+                "Retry-After": str(decision.retry_after),
+                "X-RateLimit-Limit": str(decision.limit),
+                "X-RateLimit-Remaining": "0",
+            },
+        )
+
+    response = await call_next(request)
+    if decision.limit:
+        response.headers["X-RateLimit-Limit"] = str(decision.limit)
+        response.headers["X-RateLimit-Remaining"] = str(decision.remaining)
+    return response
+
+
 class HealthResponse(BaseModel):
     status: str
 
@@ -85,7 +135,7 @@ async def health():
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
-    mode: Literal["vector", "hybrid", "hybrid+rerank"] = "hybrid+rerank"
+    mode: Literal["vector", "hybrid", "hybrid+rerank"] = "vector"
 
 class SearchResult(BaseModel):
     id: int
@@ -138,10 +188,12 @@ class HistoryTurn(BaseModel):
     content: str
 
 class ChatRequest(BaseModel):
-    question: str
-    history: list[HistoryTurn] | None = None
-    top_k: int = 5
-    mode: Literal["vector", "hybrid", "hybrid+rerank"] = "hybrid+rerank"
+    # /chat is open to anyone, so the request itself has to be bounded: these
+    # caps put a ceiling on the prompt size a single call can produce.
+    question: str = Field(..., min_length=1, max_length=600)
+    history: list[HistoryTurn] | None = Field(default=None, max_length=10)
+    top_k: int = Field(default=5, ge=1, le=10)
+    mode: Literal["vector", "hybrid", "hybrid+rerank"] = "vector"
     trace: bool = False
 
 _CITATION_RE = re.compile(r"\[Source\s+(\d+)\]")
@@ -228,6 +280,28 @@ async def _chat_stream(
         for c in chunks
     ]
     yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
+
+    # Sources are free to serve, so they are sent even when the day's answer
+    # budget is gone — the reader still gets the retrieval result, just not a
+    # generated answer. Checked here, immediately before the only paid call.
+    spend = _daily_chat_budget.try_spend()
+    if not spend.allowed:
+        hours = max(1, round(spend.resets_in_seconds / 3600))
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "error",
+                    "message": (
+                        "The public demo has reached today's answer limit. "
+                        f"It resets in about {hours}h. Search and the retrieval "
+                        "lab are unaffected — they don't call the model."
+                    ),
+                }
+            )
+            + "\n\n"
+        )
+        return
 
     answer = ""
     try:
@@ -373,78 +447,6 @@ class IngestRequest(BaseModel):
     refresh: bool = True
 
 
-class SignUpRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=8)
-
-
-class SignInRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class UserResponse(BaseModel):
-    id: str
-    email: str
-
-
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    password: str = Field(..., min_length=8)
-
-
-@app.post("/auth/signup", response_model=UserResponse)
-async def signup(req: SignUpRequest):
-    with get_conn() as conn:
-        if get_user_by_email(conn, req.email):
-            raise HTTPException(status_code=409, detail="Email already registered")
-        user = create_user(conn, req.email, hash_password(req.password))
-    return {"id": user["id"], "email": user["email"]}
-
-
-@app.post("/auth/signin", response_model=UserResponse)
-async def signin(req: SignInRequest):
-    with get_conn() as conn:
-        user = get_user_by_email(conn, req.email)
-        if not user or not verify_password(req.password, user["password_hash"]):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-    return {"id": user["id"], "email": user["email"]}
-
-
-@app.get("/auth/me", response_model=UserResponse)
-async def me(user_id: str = Query(...)):
-    with get_conn() as conn:
-        user = get_user_by_id(conn, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-    return {"id": user["id"], "email": user["email"]}
-
-
-@app.post("/auth/forgot-password")
-async def forgot_password(req: ForgotPasswordRequest):
-    with get_conn() as conn:
-        user = get_user_by_email(conn, req.email)
-        if user:
-            token = create_password_reset(conn, user["id"])
-            send_reset_email(req.email, token)
-    return {"status": "ok"}
-
-
-@app.post("/auth/reset-password", response_model=UserResponse)
-async def reset_password(req: ResetPasswordRequest):
-    with get_conn() as conn:
-        user_id = validate_reset_token(conn, req.token)
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid or expired token")
-        update_password(conn, user_id, hash_password(req.password))
-        user = get_user_by_id(conn, user_id)
-    return {"id": user["id"], "email": user["email"]}
-
-
 def _ingest_env() -> dict[str, str]:
     # The ingest subprocess reads plain DATABASE_URL, but deployed containers
     # only receive ISRA_DATABASE_URL (Secret Manager) — map it explicitly.
@@ -498,8 +500,20 @@ async def _ingest_stream(limit: int | None, refresh: bool):
         _ingest_running = False
 
 @app.post("/ingest")
-async def ingest(req: IngestRequest):
+async def ingest(req: IngestRequest, x_isra_admin_key: str | None = Header(default=None)):
     global _ingest_running
+
+    # The one write endpoint. A shared key rather than an account system: it
+    # stops a passer-by triggering a re-ingest and claims nothing more. An unset
+    # key refuses everything, so forgetting to configure it fails closed.
+    if not _ADMIN_KEY or not x_isra_admin_key or not secrets.compare_digest(
+        x_isra_admin_key, _ADMIN_KEY
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Ingesting data needs the admin key. Reading is open to everyone.",
+        )
+
     if _ingest_running:
         body = json.dumps(
             {"type": "error", "message": "An ingest is already running."}

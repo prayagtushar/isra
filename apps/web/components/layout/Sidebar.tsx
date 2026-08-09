@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { NAV, activeNav } from "./nav";
 import { Logo } from "./Logo";
 import { ConversationList } from "./ConversationList";
@@ -41,7 +41,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <button
           type="button"
           onClick={startNewChat}
-          className="flex h-9 w-full items-center gap-2 rounded-lg border border-line px-3 text-[13px] font-medium text-ink transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+          className="flex h-9 w-full items-center gap-2 rounded-[3px] border border-line px-3 text-[13px] font-medium text-ink transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
         >
           <Plus size={15} className="text-faint" />
           New chat
@@ -59,7 +59,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               onClick={onNavigate}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
+                "flex items-center gap-2.5 rounded-[3px] px-3 py-2 text-[13px] transition-colors",
                 isActive
                   ? "bg-panel-2 font-medium text-ink"
                   : "text-muted hover:bg-panel-2 hover:text-ink",
@@ -113,20 +113,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center justify-between border-t border-line pt-3">
           <span className="label">Theme</span>
           <ThemeToggle />
-        </div>
-        <div className="flex items-center justify-between border-t border-line pt-3">
-          <span className="label">Session</span>
-          <button
-            type="button"
-            onClick={async () => {
-              await fetch("/api/auth/signout", { method: "POST" });
-              window.location.href = "/";
-            }}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-muted transition-colors hover:bg-panel-2 hover:text-ink"
-          >
-            <LogOut size={14} />
-            Log out
-          </button>
         </div>
       </div>
     </div>

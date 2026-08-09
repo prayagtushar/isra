@@ -22,5 +22,5 @@ export async function POST(req: NextRequest): Promise<Response> {
       thumbs: body.thumbs,
       comment: body.comment ?? null,
     }),
-  });
+  }, req);
 }

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { API_URL } from "@/lib/env";
 import type { ChatRequest } from "@/lib/types";
+import { clientHeaders } from "@/lib/proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,12 +17,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     upstream = await fetch(`${API_URL}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...clientHeaders(req) },
       body: JSON.stringify({
         question: body.question,
         history: body.history ?? [],
         top_k: body.top_k ?? 5,
-        mode: body.mode ?? "hybrid+rerank",
+        mode: body.mode ?? "vector",
         trace: body.trace ?? false,
       }),
     });

@@ -25,7 +25,7 @@ export function Topbar({
           type="button"
           onClick={onMenu}
           aria-label="Open navigation"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-panel-2 hover:text-ink lg:hidden"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-[3px] text-muted transition-colors hover:bg-panel-2 hover:text-ink lg:hidden"
         >
           <Menu size={16} />
         </button>
@@ -33,7 +33,7 @@ export function Topbar({
           type="button"
           onClick={onToggleSidebar}
           aria-label="Toggle sidebar"
-          className="hidden h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-panel-2 hover:text-ink lg:inline-flex"
+          className="hidden h-8 w-8 items-center justify-center rounded-[3px] text-muted transition-colors hover:bg-panel-2 hover:text-ink lg:inline-flex"
         >
           <PanelLeft size={16} />
         </button>

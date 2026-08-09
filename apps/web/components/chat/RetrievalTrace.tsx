@@ -6,42 +6,32 @@ import { formatScore, hostname, truncate } from "@/lib/format";
 import type { RetrievalTrace, Source, TraceStage } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
-const STAGE_LABELS: Record<TraceStage["name"], string> = {
-  vector: "Vector search",
-  keyword: "Keyword search",
-  fusion: "RRF fusion",
-  rerank: "BGE rerank",
-};
-
-function ScoreBar({ score, maxScore }: { score: number; maxScore: number }) {
-  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-  return (
-    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-panel-2">
-      <motion.div
-        className="h-full bg-ink/70"
-        initial={{ width: 0 }}
-        animate={{ width: `${pct}%` }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      />
-    </div>
-  );
-}
+import {
+  CHANNEL_HINTS,
+  CHANNEL_LABELS,
+  channelStyle,
+  stageChannel,
+  type Channel,
+} from "@/lib/channels";
+import { ScoreBar } from "@/components/ui/ScoreBar";
 
 function StageCard({
   rank,
   source,
   maxScore,
+  channel,
 }: {
   rank: number;
   source: Source;
   maxScore: number;
+  channel: Channel;
 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="rounded-lg border border-line bg-panel p-2.5"
+      className="rounded-[3px] border border-line bg-panel p-2.5"
     >
       <div className="flex items-start gap-2">
         <span className="w-4 shrink-0 pt-0.5 font-mono text-[10px] tabular-nums text-faint">
@@ -56,7 +46,12 @@ function StageCard({
               {formatScore(source.score)}
             </span>
           </div>
-          <ScoreBar score={source.score} maxScore={maxScore} />
+          <ScoreBar
+            score={source.score}
+            maxScore={maxScore}
+            channel={channel}
+            className="mt-1.5 h-1"
+          />
           <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
             {truncate(source.text, 120)}
           </p>
@@ -79,6 +74,7 @@ function StageSection({ stage, index }: { stage: TraceStage; index: number }) {
     () => Math.max(...stage.results.map((r) => r.score), 0),
     [stage.results],
   );
+  const channel = stageChannel(stage.name);
 
   return (
     <motion.section
@@ -88,8 +84,16 @@ function StageSection({ stage, index }: { stage: TraceStage; index: number }) {
       className="border-b border-line last:border-b-0"
     >
       <div className="flex items-center justify-between px-3 py-2">
-        <h3 className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink">
-          {STAGE_LABELS[stage.name]}
+        <h3
+          className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink"
+          title={CHANNEL_HINTS[channel]}
+        >
+          <span
+            aria-hidden
+            className="h-2.5 w-2.5 rounded-[3px]"
+            style={channelStyle(channel)}
+          />
+          {CHANNEL_LABELS[channel]}
         </h3>
         <span className="font-mono text-[9px] tabular-nums text-faint">
           {stage.results.length}
@@ -102,6 +106,7 @@ function StageSection({ stage, index }: { stage: TraceStage; index: number }) {
             rank={i + 1}
             source={source}
             maxScore={maxScore}
+            channel={channel}
           />
         ))}
       </div>

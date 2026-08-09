@@ -10,6 +10,7 @@ import { TopKControl } from "@/components/ui/TopKControl";
 import { Spinner } from "@/components/ui/Spinner";
 import { StateView } from "@/components/ui/StateView";
 import { ResultRow } from "./ResultRow";
+import { modeChannel } from "@/lib/channels";
 import type { Source } from "@/lib/types";
 
 export function SearchView() {
@@ -52,7 +53,7 @@ export function SearchView() {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && run()}
                 placeholder="Search the corpus for a chunk…"
-                className="h-10 w-full rounded-lg border border-line bg-panel pl-9 pr-3 text-sm text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+                className="h-10 w-full rounded-[3px] border border-line bg-panel pl-9 pr-3 text-sm text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
               />
             </div>
             <Button
@@ -114,6 +115,7 @@ export function SearchView() {
                     rank={i + 1}
                     source={r}
                     maxScore={results[0].score}
+                    channel={modeChannel(mode)}
                   />
                 ))}
               </ol>

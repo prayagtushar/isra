@@ -63,7 +63,7 @@ export function StartupsView() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search startups by name or description…"
-              className="h-10 w-full rounded-lg border border-line bg-panel pl-9 pr-3 text-sm text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+              className="h-10 w-full rounded-[3px] border border-line bg-panel pl-9 pr-3 text-sm text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
             />
           </div>
           {sectors.length > 0 && (

@@ -77,7 +77,7 @@ export function FeedbackBar({
               if (e.key === "Escape") setCommentOpen(false);
             }}
             placeholder="What was off? (optional)"
-            className="h-8 flex-1 rounded-lg border border-line bg-panel px-3 text-[13px] text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+            className="h-8 flex-1 rounded-[3px] border border-line bg-panel px-3 text-[13px] text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
           />
           <Button size="sm" variant="subtle" onClick={submitComment}>
             Send
@@ -107,7 +107,7 @@ function IconToggle({
       title={label}
       onClick={onClick}
       className={cn(
-        "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40",
+        "inline-flex h-7 w-7 items-center justify-center rounded-[2px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40",
         active
           ? "bg-panel-2 text-ink"
           : "text-faint hover:bg-panel-2 hover:text-ink",

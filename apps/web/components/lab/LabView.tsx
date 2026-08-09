@@ -73,7 +73,7 @@ export function LabView() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run()}
               placeholder="Run one query across all three retrieval modes…"
-              className="h-10 min-w-0 flex-1 rounded-lg border border-line bg-panel px-3 text-sm text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+              className="h-10 min-w-0 flex-1 rounded-[3px] border border-line bg-panel px-3 text-sm text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
             />
             <div className="flex items-center gap-2">
               <span className="label">Top K</span>

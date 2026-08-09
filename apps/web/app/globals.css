@@ -2,18 +2,39 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ---------------------------------------------------------------------------
+   Palette — warm neutrals, ink, and a terracotta-to-amber range.
+
+   Colour still carries meaning rather than decoration: the two search channels
+   own the two orange tones, and the final ranking they produce is drawn in ink,
+   so a reader can see two coloured inputs resolving into one authoritative
+   result.
+
+     terracotta -> vector search    amber -> keyword search    ink -> final rank
+--------------------------------------------------------------------------- */
+
 :root {
-  --base: #fbfbfa; 
-  --panel: #ffffff; 
-  --panel-2: #f3f3f1; 
-  --ink: #141413; 
-  --muted: #6e6e69; 
-  --faint: #a3a39d; 
-  --line: rgb(20 20 18 / 0.09); 
+  --base: #fbfbfa;
+  --panel: #ffffff;
+  --panel-2: #f3f3f1;
+  --ink: #141413;
+  --muted: #6e6e69;
+  --faint: #a3a39d;
+  --line: rgb(20 20 18 / 0.09);
   --line-strong: rgb(20 20 18 / 0.16);
-  --focus: #141413; 
+
+  --accent: #c8553d;
+  --accent-soft: rgb(200 85 61 / 0.1);
+  --focus: #141413;
+
+  /* Two orange tones far enough apart in hue and lightness to tell apart, plus
+     ink for the resolved ranking. */
+  --vector: #c8553d;
+  --keyword: #b9791d;
+  --rerank: #141413;
 
   --shadow-panel: 0 1px 2px rgb(20 20 18 / 0.04), 0 1px 1px rgb(20 20 18 / 0.03);
+  --shadow-lift: 0 10px 30px -12px rgb(20 20 18 / 0.18);
 }
 
 .dark {
@@ -23,11 +44,21 @@
   --ink: #f4f4f1;
   --muted: #9a9a93;
   --faint: #6b6b64;
-  --line: rgb(255 255 255 / 0.10);
-  --line-strong: rgb(255 255 255 / 0.20);
+  --line: rgb(255 255 255 / 0.1);
+  --line-strong: rgb(255 255 255 / 0.2);
+
+  --accent: #e4674a;
+  --accent-soft: rgb(228 103 74 / 0.14);
   --focus: #f4f4f1;
 
+  /* Lifted off the black ground; ink inverts to paper so the resolved ranking
+     stays the highest-contrast row on the page. */
+  --vector: #e4674a;
+  --keyword: #e0a340;
+  --rerank: #f4f4f1;
+
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lift: 0 10px 30px -12px rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
@@ -40,7 +71,12 @@
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
   --color-focus: var(--focus);
-  --color-accent: #C8553D;
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-vector: var(--vector);
+  --color-keyword: var(--keyword);
+  --color-rerank: var(--rerank);
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
     sans-serif;
@@ -48,8 +84,9 @@
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
     monospace;
 
-  --radius-card: 0.75rem;
-  --radius-input: 1rem;
+  /* Near-zero radii: this reads as an instrument, not a card deck. */
+  --radius-card: 3px;
+  --radius-input: 3px;
 }
 
 @layer base {
@@ -70,30 +107,40 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /* Mono is the default face. Scores, names, modes and IDs are the bulk of
+     this interface and they line up in a monospace; prose is the exception and
+     opts in via .prose-human. */
   body {
     background-color: var(--base);
     color: var(--ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum" 1;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  ::selection {
-    background-color: var(--ink);
-    color: var(--base);
+  /* Text a person or a model wrote, rather than data: answers, descriptions. */
+  .prose-human {
+    font-family: var(--font-sans);
+    font-feature-settings: normal;
+    line-height: 1.6;
   }
 
-  
+  ::selection {
+    background-color: var(--accent);
+    color: #fff;
+  }
+
+  /* Small caps-style metadata: the workhorse label for scores, modes and keys. */
   .label {
     font-family: var(--font-mono);
-    font-size: 0.6875rem; 
+    font-size: 0.6875rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--faint);
     font-weight: 500;
   }
 
-  
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--line-strong) transparent;
@@ -111,14 +158,16 @@
   }
 }
 
-@keyframes token-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* Headings. Mono is already the body face, so the display style is about
+   weight and tightened tracking rather than a different family. */
+
+.display-sm {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
 }
+
 @keyframes pulse-dot {
   0%,
   100% {
@@ -137,10 +186,6 @@
     opacity: 1;
     transform: none;
   }
-}
-
-.animate-token-in {
-  animation: token-in 0.18s ease-out both;
 }
 .animate-pulse-dot {
   animation: pulse-dot 1.1s ease-in-out infinite;

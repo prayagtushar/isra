@@ -15,7 +15,6 @@ dependencies = [
     "pydantic-settings>=2.0",
     "python-dotenv>=1",
     "openrouter>=0.10.0",
-    "bcrypt>=5.0.0",
 ]
 
 [build-system]

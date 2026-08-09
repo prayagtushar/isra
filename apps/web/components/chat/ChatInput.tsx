@@ -64,7 +64,7 @@ export function ChatInput({
             type="button"
             onClick={onStop}
             aria-label="Stop generating"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-base transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[3px] bg-ink text-base transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
           >
             <Square size={12} fill="currentColor" />
           </button>
@@ -74,7 +74,7 @@ export function ChatInput({
             onClick={submit}
             disabled={!value.trim()}
             aria-label="Send message"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-base transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 disabled:opacity-25"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[3px] bg-ink text-base transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 disabled:opacity-25"
           >
             <ArrowUp size={16} />
           </button>

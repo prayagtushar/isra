@@ -60,7 +60,7 @@ export function ConversationList({ onNavigate }: { onNavigate?: () => void }) {
                   if (e.key === "Enter") commit();
                   if (e.key === "Escape") setEditingId(null);
                 }}
-                className="h-8 min-w-0 flex-1 rounded-md border border-line bg-panel px-2 text-[13px] text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+                className="h-8 min-w-0 flex-1 rounded-[2px] border border-line bg-panel px-2 text-[13px] text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
               />
               <SmallIcon label="Save" onClick={commit}>
                 <Check size={13} />
@@ -78,7 +78,7 @@ export function ConversationList({ onNavigate }: { onNavigate?: () => void }) {
               type="button"
               onClick={() => open(c.id)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md py-2 pl-3 pr-16 text-left text-[13px] transition-colors",
+                "flex w-full items-center gap-2 rounded-[2px] py-2 pl-3 pr-16 text-left text-[13px] transition-colors",
                 active
                   ? "bg-panel-2 text-ink"
                   : "text-muted hover:bg-panel-2 hover:text-ink",
@@ -130,7 +130,7 @@ function SmallIcon({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-faint transition-colors hover:bg-line-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+      className="inline-flex h-6 w-6 items-center justify-center rounded-[2px] text-faint transition-colors hover:bg-line-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
     >
       {children}
     </button>

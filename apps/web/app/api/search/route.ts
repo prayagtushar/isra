@@ -16,7 +16,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     body: JSON.stringify({
       query: body.query,
       top_k: body.top_k ?? 5,
-      mode: body.mode ?? "hybrid+rerank",
+      mode: body.mode ?? "vector",
     }),
-  });
+  }, req);
 }

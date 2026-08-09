@@ -14,7 +14,7 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/", label: "Chat", icon: MessageSquare },
   { href: "/lab", label: "Retrieval Lab", icon: Columns3 },
   { href: "/search", label: "Search", icon: Search },
   { href: "/startups", label: "Startups", icon: LayoutGrid },
@@ -22,8 +22,9 @@ export const NAV: NavItem[] = [
 ];
 
 export function activeNav(pathname: string): NavItem | undefined {
-  return (
-    NAV.find((n) => pathname === n.href) ??
-    NAV.find((n) => pathname.startsWith(n.href))
-  );
+  const exact = NAV.find((n) => pathname === n.href);
+  if (exact) return exact;
+  // "/" is a prefix of every path, so the prefix match must skip it or Chat
+  // would light up on every route.
+  return NAV.find((n) => n.href !== "/" && pathname.startsWith(n.href));
 }

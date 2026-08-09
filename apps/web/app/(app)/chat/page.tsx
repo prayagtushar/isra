@@ -1,10 +1,7 @@
-import { Suspense } from "react";
-import { ChatView } from "@/components/chat/ChatView";
+import { redirect } from "next/navigation";
 
+// Chat moved to "/". Kept so links already in the wild — the README, the
+// deployed demo link — keep working.
 export default function ChatPage() {
-  return (
-    <Suspense fallback={null}>
-      <ChatView />
-    </Suspense>
-  );
+  redirect("/");
 }

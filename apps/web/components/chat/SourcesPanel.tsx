@@ -22,7 +22,7 @@ export function SourcesPanel({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="group inline-flex items-center gap-1.5 rounded-md py-1 text-faint transition-colors hover:text-ink"
+        className="group inline-flex items-center gap-1.5 rounded-[2px] py-1 text-faint transition-colors hover:text-ink"
       >
         <ChevronDown
           size={13}

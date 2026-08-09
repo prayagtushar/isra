@@ -132,7 +132,7 @@ export function CommandPalette() {
         className="absolute inset-0 bg-ink/25 backdrop-blur-[2px]"
         onClick={() => setOpen(false)}
       />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-xl border border-line bg-panel shadow-[var(--shadow-panel)] animate-rise-in">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-[3px] border border-line bg-panel shadow-[var(--shadow-panel)] animate-rise-in">
         <div className="flex items-center gap-2 border-b border-line px-3">
           <Search size={15} className="text-faint" />
           <input
@@ -160,7 +160,7 @@ export function CommandPalette() {
                   onMouseEnter={() => setIndex(i)}
                   onClick={a.run}
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] transition-colors",
+                    "flex w-full items-center gap-2.5 rounded-[3px] px-3 py-2 text-left text-[13px] transition-colors",
                     i === index ? "bg-panel-2 text-ink" : "text-muted",
                   )}
                 >

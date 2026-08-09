@@ -1,42 +1,65 @@
 "use client";
 
+/**
+ * The arrival screen. This is the whole first impression now that there is no
+ * landing page, so it has to answer three questions before the visitor types
+ * anything: what this is, what it knows about, and what to ask.
+ *
+ * The last example is deliberately outside the corpus. The system abstained on
+ * all ten unanswerable questions in the eval set, and one click showing that is
+ * worth more than a sentence claiming it.
+ */
+
 const EXAMPLES = [
-  "What does Ola Electric do?",
-  "Who founded Razorpay, and what do they build?",
-  "Which fintech startups are in the dataset?",
-  "Compare Zomato and Zerodha's business models.",
+  { q: "Which Indian startup builds electric scooters?", note: "direct lookup" },
+  {
+    q: "Which companies offer payment gateways for businesses?",
+    note: "needs two startups",
+  },
+  {
+    q: "where do retail investors in India buy stocks cheaply?",
+    note: "no names given",
+  },
+  {
+    q: "What was Flipkart's valuation at its last funding round?",
+    note: "not in the corpus — watch it decline",
+  },
 ];
 
 export function EmptyState({ onPick }: { onPick: (q: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
-      <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-ink text-base">
-        <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-          <path d="M8 0.5l1.7 4.1 4.1 1.7-4.1 1.7L8 12.1 6.3 8 2.2 6.3 6.3 4.6 8 0.5z" />
-          <circle cx="2.4" cy="13.4" r="1.25" />
-          <circle cx="13.6" cy="13.4" r="1.25" />
-        </svg>
-      </span>
+    <div className="flex h-full flex-col items-center justify-center px-6 py-12">
+      <div className="w-full max-w-2xl">
+        <h1 className="display-sm text-[26px] text-ink">
+          Indian Startup Ecosystem RAG
+        </h1>
+        <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.14em] text-faint">
+          111 startups · Y Combinator + Wikipedia · 384-dim embeddings
+        </p>
+        <p className="prose-human mt-4 max-w-xl text-[14px] leading-relaxed text-muted">
+          Ask a question and vector search and keyword search run side by side,
+          fuse, and rerank. Every answer cites the chunks it used, and when the
+          corpus cannot answer, it says so instead of guessing.
+        </p>
 
-      <h1 className="mt-5 text-[22px] font-semibold tracking-tight text-ink">
-        Indian Startup Ecosystem RAG
-      </h1>
-      <p className="mt-2 max-w-md text-[14px] leading-relaxed text-muted">
-        Ask anything about Indian startups. Answers are grounded in retrieved
-        sources and cited inline.
-      </p>
-
-      <div className="mt-8 grid w-full max-w-lg gap-2 sm:grid-cols-2">
-        {EXAMPLES.map((q) => (
-          <button
-            key={q}
-            type="button"
-            onClick={() => onPick(q)}
-            className="rounded-card border border-line bg-panel px-4 py-3 text-left text-[13px] leading-snug text-muted transition-colors hover:border-line-strong hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
-          >
-            {q}
-          </button>
-        ))}
+        <p className="label mt-8">try one</p>
+        <div className="mt-3 grid gap-px border border-line bg-line sm:grid-cols-2">
+          {EXAMPLES.map(({ q, note }) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => onPick(q)}
+              className="group bg-panel px-4 py-3 text-left transition-colors hover:bg-panel-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+            >
+              <span className="block text-[13px] leading-snug text-ink">
+                {q}
+              </span>
+              <span className="mt-1.5 block font-mono text-[10px] text-faint">
+                {note}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -48,7 +48,7 @@ export function StartupDrawer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-panel-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[3px] text-muted transition-colors hover:bg-panel-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
           >
             <X size={16} />
           </button>
@@ -105,7 +105,7 @@ export function StartupDrawer({
               href={startup.source_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-3 text-[13px] text-muted transition-colors hover:bg-panel-2 hover:text-ink"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[3px] border border-line px-3 text-[13px] text-muted transition-colors hover:bg-panel-2 hover:text-ink"
             >
               <ExternalLink size={13} />
               {hostname(startup.source_url)}

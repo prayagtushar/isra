@@ -143,7 +143,7 @@ export function Answer({
       );
     },
     pre: ({ children }) => (
-      <pre className="mb-3 overflow-x-auto rounded-lg border border-line bg-panel-2 p-3 last:mb-0">
+      <pre className="mb-3 overflow-x-auto rounded-[3px] border border-line bg-panel-2 p-3 last:mb-0">
         {children}
       </pre>
     ),
@@ -166,7 +166,7 @@ export function Answer({
   };
 
   return (
-    <div className="text-[15px] text-ink">
+    <div className="prose-human text-[15px] text-ink">
       <Markdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </Markdown>

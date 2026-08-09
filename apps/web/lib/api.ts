@@ -1,4 +1,5 @@
 
+import { getAdminKey } from "@/components/ingest/AdminKey";
 import { parseSSE } from "./sse";
 import type {
   ChatEvent,
@@ -50,10 +51,18 @@ export async function* streamIngest(
 ): AsyncGenerator<IngestEvent, void, unknown> {
   const res = await fetch("/api/ingest", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-ISRA-Admin-Key": getAdminKey(),
+    },
     body: JSON.stringify(req),
     signal,
   });
+  if (res.status === 401) {
+    throw new Error(
+      "Re-ingesting needs the admin key. Reading the corpus is open to everyone.",
+    );
+  }
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => "");
     throw new Error(detail || `Ingest request failed (${res.status})`);

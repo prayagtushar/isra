@@ -17,7 +17,7 @@ interface Settings {
   showRetrievalTrace: boolean;
 }
 
-const DEFAULTS: Settings = { mode: "hybrid+rerank", topK: 5, showRetrievalTrace: true };
+const DEFAULTS: Settings = { mode: "vector", topK: 5, showRetrievalTrace: true };
 
 interface SettingsContextValue extends Settings {
   setMode: (mode: RetrievalMode) => void;

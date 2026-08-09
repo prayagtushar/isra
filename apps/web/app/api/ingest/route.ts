@@ -11,7 +11,11 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     upstream = await fetch(`${API_URL}/ingest`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Pass the caller's key through; the API is what actually checks it.
+        "X-ISRA-Admin-Key": req.headers.get("x-isra-admin-key") ?? "",
+      },
       body: JSON.stringify({
         limit: body.limit ?? null,
         refresh: body.refresh ?? true,

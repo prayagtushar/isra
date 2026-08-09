@@ -7,16 +7,16 @@ type Size = "sm" | "md" | "icon" | "iconSm";
 
 const VARIANTS: Record<Variant, string> = {
   primary: "bg-ink text-base hover:opacity-90",
-  outline: "border border-line text-ink hover:bg-panel-2",
+  outline: "border border-line text-ink hover:border-line-strong hover:bg-panel-2",
   ghost: "text-muted hover:text-ink hover:bg-panel-2",
   subtle: "bg-panel-2 text-ink hover:bg-line-strong",
 };
 
 const SIZES: Record<Size, string> = {
-  sm: "h-8 px-3 text-[13px] rounded-lg gap-1.5",
-  md: "h-9 px-4 text-sm rounded-lg gap-2",
-  icon: "h-9 w-9 rounded-lg",
-  iconSm: "h-7 w-7 rounded-md",
+  sm: "h-8 px-3 text-[13px] rounded-[3px] gap-1.5",
+  md: "h-9 px-4 text-sm rounded-[3px] gap-2",
+  icon: "h-9 w-9 rounded-[3px]",
+  iconSm: "h-7 w-7 rounded-[2px]",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

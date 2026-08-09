@@ -56,6 +56,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onToggleSidebar={toggleCollapsed}
         />
         <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+        {/* The one line of framing that used to be a whole landing page. It
+            rides along on every surface rather than gating the demo behind an
+            explanation. */}
+        <footer className="shrink-0 border-t border-line px-4 py-2.5">
+          <p className="font-mono text-[10px] leading-relaxed text-faint">
+            Vector and keyword search run side by side, fuse, and rerank. Every
+            answer cites the chunks it used. Reading is open; re-ingesting the
+            corpus needs a key.
+          </p>
+        </footer>
       </div>
 
       <CommandPalette />
