@@ -319,6 +319,33 @@ def test_resolve_slug_follows_a_redirect_even_to_an_unrecognizable_name():
     )
     assert resolved == "Eternal_Limited"
 
+WEBSITE_INFOBOX_MARKUP = """
+<table class="infobox">
+  <tbody>
+    <tr><th>Type of site</th><td>Online food ordering</td></tr>
+    <tr><th>Founded</th><td>2008</td></tr>
+    <tr><th>Services</th><td>Food delivery<br/>Table reservation</td></tr>
+  </tbody>
+</table>
+"""
+
+def test_parse_infobox_reads_type_of_site_when_there_is_no_industry():
+    """Internet companies use {{infobox website}}, which has no Industry row.
+    Zomato -- one of the best-known companies in the corpus -- came out with no
+    sector at all and could not be reached from the /startups filter."""
+    assert parse_infobox(WEBSITE_INFOBOX_MARKUP)["industry"] == ["Online food ordering"]
+
+def test_parse_infobox_prefers_industry_over_type_of_site():
+    both = WEBSITE_INFOBOX_MARKUP.replace(
+        "<tr><th>Founded</th>", "<tr><th>Industry</th><td>Hospitality</td></tr><tr><th>Founded</th>"
+    )
+    assert parse_infobox(both)["industry"] == ["Hospitality"]
+
+def test_parse_infobox_ignores_services_which_are_products_not_sectors():
+    """"Table reservation" is a feature, not a sector, and would show up as a
+    filter chip matching one company."""
+    assert parse_infobox(WEBSITE_INFOBOX_MARKUP)["industry"] == ["Online food ordering"]
+
 def test_seed_details_scrapes_by_name_and_skips_what_has_no_article():
     """These records exist to add companies the unicorn list misses. Before
     this, four of them were hand-written fixtures in the corpus with company

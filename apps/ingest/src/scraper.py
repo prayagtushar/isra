@@ -216,6 +216,13 @@ def parse_infobox(html: str) -> dict:
 
         if key == "industry":
             info["industry"] = _list_cell(data)
+        elif key == "type of site" and "industry" not in info:
+            # Internet companies get {{infobox website}}, which has no Industry
+            # row at all -- so Zomato, one of the best-known companies in the
+            # corpus, carried no sector and could not be reached from the
+            # /startups filter. "Type of site" is that template's equivalent
+            # ("Online food ordering"). Industry still wins when both appear.
+            info["industry"] = _list_cell(data)
         elif key == "founded":
             match = re.search(r"\b(\d{4})\b", value)
             if match:
