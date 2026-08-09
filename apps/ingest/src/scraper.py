@@ -15,7 +15,16 @@ USER_AGENT = "ISRA-Bot/0.1 {+https://github.com/prayagtushar/isra.git}"
 _LIST_URL = "https://en.wikipedia.org/wiki/List_of_unicorn_startup_companies"
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
-_CITATION = re.compile(r"\[\s*\d+\s*\]")
+# Footnotes and the editorial markers Wikipedia renders inline. Only numeric
+# footnotes were stripped, so descriptions reached the corpus reading
+# "As of August 2024,[update] the company..." -- and that text is what gets
+# embedded and shown, not just stored. Enumerated rather than matched by shape,
+# so a bracket a company actually wrote survives.
+_CITATION = re.compile(
+    r"\[\s*(?:\d+|[a-z]|note\s+\d+|update|citation needed|clarify|sic|"
+    r"who\?|when\?|why\?|where\?|according to whom\?)\s*\]",
+    re.IGNORECASE,
+)
 _SPLIT_RE = re.compile(r"[,;&]")
 
 @dataclass(frozen=True)
@@ -110,25 +119,27 @@ def resolve_slug(name: str, query_json: dict) -> str | None:
     India, with no mention of Razorpay at all. Picking from that list means
     filing one company's history under another company's name.
 
-    A title query answers the only question worth asking -- does an article
-    with this name exist -- and resolves redirects, which is what catches the
-    companies that have been renamed since the list was written. A redirect is
-    trusted even when the target name looks nothing like the original, because
-    an editor asserted the two names are the same subject: that is how "Zomato"
-    correctly reaches "Eternal Limited". Anything else returns None and the
-    record keeps its stub.
+    A title query answers the only question worth asking -- does an article with
+    this name exist -- and resolves redirects, which is what catches companies
+    renamed since the list was written.
+
+    Order matters, and it is the whole subtlety here. A matching title wins over
+    a redirect, because a company name that collides with an ordinary word
+    redirects somewhere useless: "Zepto" redirects to "Metric prefix", the SI
+    unit, while the grocery company lives at "Zepto (company)". Only when no
+    title matches is the redirect trusted -- and then it is trusted even if the
+    target looks nothing like the name, because at that point an editor
+    asserting the two names are one subject is the only evidence available, and
+    it is how "Zomato" correctly reaches "Eternal Limited".
+
+    Anything else returns None and the record keeps its stub.
     """
     if not name.strip():
         return None
 
     query = query_json.get("query") or {}
-
-    # A redirect is an editorial statement that two names denote one subject.
-    redirects = {r.get("from"): r.get("to") for r in query.get("redirects") or []}
-    if name in redirects:
-        return str(redirects[name]).replace(" ", "_")
-
     target = re.sub(r"[^a-z0-9]", "", name.lower())
+
     for page in (query.get("pages") or {}).values():
         if "missing" in page:
             continue
@@ -139,6 +150,11 @@ def resolve_slug(name: str, query_json: dict) -> str | None:
         candidate = re.sub(r"[^a-z0-9]", "", bare.lower())
         if candidate and (target in candidate or candidate in target):
             return title.replace(" ", "_")
+
+    # No article carries this name. A redirect is the remaining evidence.
+    redirects = {r.get("from"): r.get("to") for r in query.get("redirects") or []}
+    if name in redirects:
+        return str(redirects[name]).replace(" ", "_")
     return None
 
 def parse_unicorn_table(html: str) -> list[UnicornRecord]:

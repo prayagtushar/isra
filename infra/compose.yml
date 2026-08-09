@@ -1,3 +1,9 @@
+# Named explicitly. Compose otherwise derives the project name from the compose
+# file's parent directory -- "infra" -- which every project of mine uses, so two
+# of them share one Compose project and the second `up` recreates the first's
+# container as its own. That happened.
+name: isra
+
 services:
   db:
     image: pgvector/pgvector:pg16

@@ -213,6 +213,22 @@ INFOBOX_CITED_LIST_MARKUP = """
 </table>
 """
 
+def test_clean_strips_editorial_markers_not_just_numbered_footnotes():
+    """Only [1]-style footnotes were removed, so a description reached the
+    corpus reading "As of August 2024,[update] ..." -- and the description is
+    what gets embedded and rendered, not merely stored."""
+    assert _clean("As of August 2024,[update] it operates 250 stores.[12]") == (
+        "As of August 2024, it operates 250 stores."
+    )
+    assert _clean("It was profitable[citation needed] by 2023.") == (
+        "It was profitable by 2023."
+    )
+
+def test_clean_keeps_brackets_that_are_part_of_the_text():
+    """The marker list is enumerated rather than matched by shape, so a bracket
+    a company actually wrote is not silently deleted."""
+    assert _clean("The product [Beta] shipped.") == "The product [Beta] shipped."
+
 def test_parse_infobox_drops_citation_markers_from_a_list():
     """A reference renders as <sup>[1]</sup>. Inserting separators at every node
     boundary first would turn it into "[, 1, ]", which the citation pattern no
@@ -301,6 +317,21 @@ def test_resolve_slug_follows_a_redirect_even_to_an_unrecognizable_name():
         "Zomato", _titles(("Eternal Limited", True), redirects={"Zomato": "Eternal Limited"})
     )
     assert resolved == "Eternal_Limited"
+
+def test_resolve_slug_prefers_a_matching_title_over_a_redirect():
+    """Real case, and the reason title matches are checked first: "Zepto"
+    redirects to "Metric prefix" -- the SI unit -- while the grocery company
+    lives at "Zepto (company)". Trusting the redirect first files an article
+    about scientific notation under a startup's name."""
+    resolved = resolve_slug(
+        "Zepto",
+        _titles(
+            ("Metric prefix", True),
+            ("Zepto (company)", True),
+            redirects={"Zepto": "Metric prefix"},
+        ),
+    )
+    assert resolved == "Zepto_(company)"
 
 def test_resolve_slug_rejects_an_article_about_something_else():
     """Wikipedia has an article at "MPL" -- a disambiguation page covering

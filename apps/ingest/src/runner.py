@@ -16,7 +16,23 @@ from src.scraper import scrape_startups
 from src.yc_scraper import scrape_yc_startups
 from src.schema import Startup
 
-CACHE_PATH = Path("data/cache/startups.jsonl")
+_DEFAULT_CACHE_PATH = Path("data/cache/startups.jsonl")
+
+def cache_path() -> Path:
+    """Where the scraped corpus is cached between runs.
+
+    Read at call time, and overridable with ISRA_INGEST_CACHE, so a test can be
+    pointed at a temporary file. It matters more than it looks: the path is
+    relative to the working directory, and both pytest and `bun run ingest` run
+    from apps/ingest -- so a test that exercised the cache wrote the same file a
+    real ingest would later read, and a run without --no-cache would load two
+    fixture companies and upsert them over the live corpus. That happened.
+
+    tests/conftest.py redirects this for every test rather than per test, so a
+    test added later cannot reintroduce it by forgetting.
+    """
+    override = os.environ.get("ISRA_INGEST_CACHE")
+    return Path(override) if override else _DEFAULT_CACHE_PATH
 
 # Default number of YC companies to pull (Wikipedia uses the caller's `limit`).
 YC_DEFAULT_LIMIT = 50
@@ -24,15 +40,17 @@ YC_DEFAULT_LIMIT = 50
 load_dotenv()
 
 def _load_cache() -> List[Startup]:
-    if not CACHE_PATH.exists():
+    path = cache_path()
+    if not path.exists():
         return []
 
-    with CACHE_PATH.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8") as f:
         return [Startup.model_validate(json.loads(line)) for line in f if line.strip()]
 
 def _save_cache(startups: List[Startup]) -> None:
-    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with CACHE_PATH.open("w", encoding="utf-8") as f:
+    path = cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
         for s in startups:
             f.write(json.dumps(s.model_dump(mode="json")) + "\n")
 
@@ -42,22 +60,30 @@ def _emit(progress: bool, event: dict) -> None:
     if progress:
         print(json.dumps(event), flush=True)
 
-def _scrape_all(limit: int | None) -> List[Startup]:
-    """Scrape every source and concatenate (dedup happens later via merge)."""
+def _scrape_all(limit: int | None) -> tuple[List[Startup], List[str]]:
+    """Scrape every source and concatenate (dedup happens later via merge).
+
+    Returns the records and the names of any sources that failed. One source
+    going down should not abort the run -- but the caller has to know, because a
+    partial scrape must not be cached as if it were the whole corpus.
+    """
     scraped: List[Startup] = []
+    failed: List[str] = []
 
     try:
         scraped += scrape_startups(limit=limit)            # Wikipedia unicorns
     except Exception as exc:
         print(f"wikipedia scrape failed: {exc}")
+        failed.append("wikipedia")
 
     try:
         yc_limit = limit if limit is not None else YC_DEFAULT_LIMIT
         scraped += scrape_yc_startups(limit=yc_limit)      # YC India companies
     except Exception as exc:
         print(f"yc scrape failed: {exc}")
+        failed.append("yc")
 
-    return scraped
+    return scraped, failed
 
 def run_ingest(
     use_cache: bool = True,
@@ -81,11 +107,21 @@ def run_ingest(
     # scrape: pull from all sources (Wikipedia + YC); fall back to sample data
     _emit(progress, {"type": "stage", "stage": "scrape", "status": "start"})
     if not startup_cache:
-        scraped = _scrape_all(limit)
+        scraped, failed = _scrape_all(limit)
         if not scraped:
             scraped = sample_startups()
         startup_cache = merge_startups(scraped)   # dedupe across sources by normalized_name
-        _save_cache(startup_cache)
+        if failed:
+            # Caching a partial scrape makes the gap permanent: the next run
+            # loads the short corpus and never retries the source that failed.
+            # A truncated Y Combinator download already produced a 58-record
+            # corpus this way, where a full run gives 107.
+            print(
+                f"not caching: {', '.join(failed)} failed, so this corpus is "
+                f"incomplete ({len(startup_cache)} records)"
+            )
+        else:
+            _save_cache(startup_cache)
     _emit(progress, {"type": "stage", "stage": "scrape", "status": "done",
                      "count": len(startup_cache), "cached": cached})
 
