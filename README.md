@@ -1,8 +1,12 @@
 # Indian Startup Ecosystem RAG (ISRA)
 
-**[Try the live demo →](https://isra.prayagtushar.xyz/lab)** — the retrieval lab compares vector, hybrid and hybrid+rerank on the same query, no signup required. [`/search`](https://isra.prayagtushar.xyz/search) and [`/startups`](https://isra.prayagtushar.xyz/startups) are open too; [`/chat`](https://isra.prayagtushar.xyz/chat) asks for a free account because each answer spends LLM tokens.
+[![CI](https://github.com/prayagtushar/isra/actions/workflows/ci.yml/badge.svg)](https://github.com/prayagtushar/isra/actions/workflows/ci.yml)
 
-A production-ready, hand-rolled Retrieval-Augmented Generation (RAG) system over Indian startup data. It demonstrates a complete retrieval pipeline — vector search + Postgres full-text search → RRF fusion → BGE reranker — served through a streaming FastAPI backend and a Next.js chat UI.
+**[Try the live demo →](https://isra.prayagtushar.xyz)** — there is no landing page and no account. The site opens straight into the chat; ask a question, or compare retrieval modes side by side in [`/lab`](https://isra.prayagtushar.xyz/lab) and browse [`/search`](https://isra.prayagtushar.xyz/search) and [`/startups`](https://isra.prayagtushar.xyz/startups). Only re-ingesting the corpus is gated, by a shared key.
+
+A hand-rolled Retrieval-Augmented Generation (RAG) system over Indian startup data, built without LangChain so that ranking, fusion and citation behaviour stay under direct control. The full pipeline — vector search + Postgres full-text search → RRF fusion → BGE reranker → streaming generation — is implemented from primitives and measured by an evaluation harness that is also hand-rolled.
+
+**Scope, stated honestly.** The corpus is 111 Indian startups scraped from Wikipedia's unicorn list and Y Combinator's directory — a deliberately small, verifiable dataset, not a web-scale index. At this size the interesting engineering is in *measuring* retrieval quality rather than in scaling it, and the numbers below are reported as measured, including where they contradict the design.
 
 ```mermaid
 flowchart LR
@@ -91,9 +95,10 @@ Key design decisions:
    - `/chat` shows progressive sources, inline citations, and 👍/👎 feedback.
    - `/lab` compares retrieval modes side-by-side.
    - `/search` and `/startups` provide search-explorer and startup-browser views.
-   - `/lab`, `/search` and `/startups` are public: they only read, so they cost
-     nothing per request. `/chat` requires an account because every call spends
-     LLM tokens, and `/ingest` requires one because it writes.
+   - Every retrieval surface is public, and so is `/chat` — the demo is meant to
+     be used without signing up. LLM spend is bounded by a global daily ceiling
+     rather than by a login. Only `/ingest` is gated, by a shared admin key,
+     because it rewrites the corpus.
 
 ### Monorepo layout
 
@@ -179,7 +184,48 @@ bun run eval -- --no-generation   # retrieval metrics only
 | `POST` | `/chat` | Streaming chat over SSE |
 | `POST` | `/feedback` | Store thumbs up/down feedback |
 | `GET` | `/startups` | Paginated startup browser data |
-| `POST` | `/ingest` | Stream ingest progress over SSE |
+| `POST` | `/ingest` | Stream ingest progress over SSE. Requires `X-ISRA-Admin-Key` |
+
+### Abuse controls
+
+`/chat` is open to anyone, so nothing stands between a stranger and the LLM bill
+except server-side limits. There are four layers, in order of what they stop:
+
+1. **A global daily ceiling** (`ISRA_DAILY_CHAT_LIMIT`, default 200 answers per
+   UTC day) — the one that actually caps spend, because per-IP limits do nothing
+   against a bot pool. When it is reached, `/chat` still returns retrieved
+   sources but stops calling the model and says so. Set it to `0` to halt
+   answering immediately without a redeploy; `-1` removes the cap.
+2. **Per-IP rate limits** (below) — stop a single visitor hammering the demo.
+3. **Bounded requests** — `question` ≤ 600 characters, ≤ 10 history turns,
+   `top_k` ≤ 10, and `max_tokens=1024` on the completion, so no single call can
+   run up an unbounded prompt.
+4. **The GCP billing budget** — the backstop, since the daily counter is held in
+   process and a restart resets it.
+
+Because the web app calls the API server-side, the API would otherwise see every
+visitor as the same hosting egress IP and one person could exhaust everyone's
+budget. The proxy forwards the caller's address, and the API trusts it only when
+`ISRA_PROXY_SECRET` matches on both sides — **set it, or per-IP limits collapse
+into a single shared bucket.**
+
+### Rate limits
+
+Every endpoint except `/health` is limited per client IP. Over-limit requests get
+`429` with `Retry-After`; allowed requests carry `X-RateLimit-Limit` and
+`X-RateLimit-Remaining`. Budgets are sized by what each call costs to serve:
+
+| Endpoint | Limit |
+|---|---|
+| `/chat` | 15 / hour (spends LLM tokens) |
+| `/ingest` | 3 / hour (writes, runs the scraper) |
+| `/search` | 30 / min (runs the cross-encoder) |
+| `/feedback` | 20 / min |
+| `/startups` | 60 / min |
+
+Limits are held in process. That is accurate while the service runs with
+`--max-instances 1`; scaling past one instance makes them per-instance and they
+would need to move to a shared store.
 
 ### Example: `/chat`
 
@@ -202,25 +248,65 @@ SSE events:
 
 ## Evaluation results
 
-Generated: 2026-06-27 · questions: 12 · top_k: 5
+Generated: 2026-08-08 · questions: 41 · top_k: 5 · judge model: `anthropic/claude-haiku-4.5`
+
+The golden set has four question types, because a single "name the startup" phrasing
+only measures one thing:
+
+| Category | n | What it tests |
+|---|---|---|
+| `direct` | 12 | Plain entity lookup |
+| `paraphrase` | 11 | Colloquial phrasing, misspellings, indirect description |
+| `multi_hop` | 8 | Questions needing **every** one of several startups retrieved |
+| `unanswerable` | 10 | Plausible questions the corpus cannot answer — the model must abstain |
 
 ### Retrieval mode comparison
 
-| Mode | hit@k | MRR |
-|---|---|---|
-| vector | 0.833 | 0.688 |
-| hybrid | 0.833 | 0.729 |
-| hybrid+rerank | 0.750 | 0.750 |
+Scored on answerable questions only. `hit@k` requires every expected entity on
+multi-hop questions; `recall@k` gives partial credit.
 
-### Generation quality (hybrid+rerank, LLM-judge)
+| Mode | hit@5 | recall@5 | MRR |
+|---|---|---|---|
+| **vector** | **0.871** | **0.858** | **0.832** |
+| hybrid | 0.774 | 0.777 | 0.667 |
+| hybrid+rerank | 0.806 | 0.828 | 0.785 |
+
+### By category (hit@5)
+
+| Mode | direct | paraphrase | multi_hop |
+|---|---|---|---|
+| vector | 1.000 | 1.000 | 0.500 |
+| hybrid | 0.833 | 1.000 | 0.375 |
+| hybrid+rerank | 0.833 | 0.909 | **0.625** |
+
+**What this changed.** On the larger question set plain vector search beats both
+hybrid variants, so `vector` is now the **default retrieval mode** — the previous
+default, `hybrid+rerank`, measured worse overall. The category split shows why:
+RRF fusion is what costs accuracy (direct lookups drop 1.000 → 0.833) because
+keyword hits displace the correct chunk on a corpus this small, and the
+cross-encoder only partly recovers it. The reranker does earn its place on
+multi-hop questions (0.500 → 0.625), which is the one case where re-scoring the
+wider fused candidate list genuinely helps. All three modes remain selectable in
+[`/lab`](https://isra.prayagtushar.xyz/lab).
+
+Next step is tuning RRF weighting rather than removing it — the fusion is
+under-tuned, not wrong in principle.
+
+### Generation quality (`vector`, LLM-judge)
 
 | Metric | Mean | Coverage |
 |---|---|---|
-| Faithfulness | 0.942 | 12/12 |
-| Answer Relevancy | 0.783 | 12/12 |
-| Context Precision | 0.183 | 12/12 |
+| Faithfulness | 0.947 | 31/31 |
+| Answer Relevancy | 0.724 | 31/31 |
+| Context Precision | 0.385 | 31/31 |
+| **Abstention** (unanswerable only) | **1.000** | 10/10 |
 
-> The low context-precision score indicates room for improvement in reranker/fusion tuning. The retrieval and generation eval code is in `apps/evals`.
+Abstention is the metric worth pointing at: on all 10 questions the corpus cannot
+answer, the model declined instead of inventing a fact. Context precision remains
+the weakest number and is the reason the fusion tuning above is the next task.
+
+Eval code lives in `apps/evals`; `EVALUATION.md` and `evaluation.json` are
+regenerated by `bun run eval`.
 
 ## Deployment
 
@@ -241,12 +327,10 @@ Generated: 2026-06-27 · questions: 12 · top_k: 5
 | `OPENROUTER_API_KEY` | LLM access for `/chat` |
 | `ISRA_OPENROUTER_API_KEY` | LLM access for evals |
 | `ISRA_CORS_ORIGINS` | Comma-separated allowed origins for direct API calls (default `*`) |
-| `ISRA_RESET_URL_BASE` | Base URL for password-reset emails (default `http://localhost:3000/reset-password`) |
-| `ISRA_SMTP_HOST` *(optional)* | SMTP server for password-reset emails |
-| `ISRA_SMTP_PORT` *(optional)* | SMTP port (default `587`) |
-| `ISRA_SMTP_USER` *(optional)* | SMTP username |
-| `ISRA_SMTP_PASS` *(optional)* | SMTP password |
-| `ISRA_SMTP_FROM` *(optional)* | From address for reset emails |
+| `ISRA_TRUSTED_PROXY_HOPS` | Proxy hops appended to `X-Forwarded-For` (default `1`, correct for Cloud Run). Set `0` when no proxy sits in front, or rate limits key on the proxy address instead of the caller |
+| `ISRA_DAILY_CHAT_LIMIT` | Answers the open demo will generate per UTC day (default `200`). `0` stops answering; `-1` removes the cap |
+| `ISRA_PROXY_SECRET` | Shared with the web app so the API can trust the forwarded caller address. **Must match `ISRA_PROXY_SECRET` on Vercel** or every visitor shares one rate-limit bucket |
+| `ISRA_ADMIN_KEY` | Shared key required by `POST /ingest`. **Unset means /ingest is closed**, so a deployment that forgets it fails closed rather than open |
 | `ISRA_LANGFUSE_PUBLIC_KEY` *(optional)* | Langfuse tracing |
 | `ISRA_LANGFUSE_SECRET_KEY` *(optional)* | Langfuse tracing |
 | `ISRA_LANGFUSE_HOST` *(optional)* | Langfuse host URL |
@@ -256,9 +340,9 @@ Generated: 2026-06-27 · questions: 12 · top_k: 5
 | Variable | Purpose |
 |---|---|
 | `API_URL` | Deployed FastAPI endpoint (required in production) |
-| `AUTH_SECRET` | Secret used to sign session cookies (≥32 chars, required in production) |
+| `ISRA_PROXY_SECRET` | Must match the API's value, so the API can trust the forwarded caller IP |
 
-The web build fails loudly if `API_URL` is missing in production; locally it falls back to `http://localhost:8000`.
+The web build fails loudly if `API_URL` is missing in production; locally it falls back to `http://localhost:8000`. There is no `AUTH_SECRET` — with accounts gone there are no sessions to sign.
 
 ### First deploy checklist
 
@@ -280,11 +364,25 @@ bun run test      # turborepo test task (web + contracts)
 Run Python tests individually:
 
 ```bash
+uv sync --all-packages
 uv run --directory packages/retrieval pytest
 uv run --directory apps/api pytest
 uv run --directory apps/ingest pytest
 uv run --directory apps/evals pytest
 ```
+
+### Continuous integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull
+request: the four Python suites against a real `pgvector` service container, plus
+the web app's lint, unit tests and production build.
+
+The retrieval integration tests bind to `ISRA_TEST_DATABASE_URL` (default
+`postgresql://isra:isra@localhost:5432/isra`) and **deliberately ignore**
+`DATABASE_URL`. They insert and delete rows, and `isra_retrieval.db` calls
+`load_dotenv()` on import — so without that separation a local test run would
+write to whatever database `.env` points at. They skip when no test database is
+reachable.
 
 ## Security notes
 

@@ -61,7 +61,6 @@ This is a **Turborepo + uv workspace** monorepo.
   - `POST /feedback` — thumbs up/down stored in Postgres.
   - `GET /startups` — paginated startup browser.
   - `POST /ingest` — SSE ingest progress.
-  - `POST /auth/signup`, `POST /auth/signin`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `GET /auth/me` — email/password auth.
 - **CORS:** configurable via `ISRA_CORS_ORIGINS` (default `*` locally).
 - **Run locally:** `bun run dev:api` → `http://localhost:8000`.
 
@@ -80,9 +79,9 @@ This is a **Turborepo + uv workspace** monorepo.
 ### `apps/web`
 
 - **Stack:** Next.js 16.2.0, React 19.2.0, TypeScript 5.9.2, Bun, Tailwind CSS v4, GSAP, Radix Slot.
-- **Public pages:** `/` landing page, `/login` sign-in, `/signup` registration, `/forgot-password`, `/reset-password`.
+- **Public pages:** every page. `/` is the chat itself — there is no landing page and no sign-in.
 - **Protected pages:** `/chat`, `/search`, `/lab`, `/startups`, `/ingest`.
-- **Auth:** email/password accounts backed by a `users` table in Postgres. Passwords are bcrypt-hashed by the FastAPI backend. Signed session cookies are managed by the Next.js app.
+- **Auth:** none. Accounts were removed; the only gate is a shared `ISRA_ADMIN_KEY` on `POST /ingest`, sent as `X-ISRA-Admin-Key`. Abuse is bounded server-side instead: per-IP rate limits, request size caps, and a global daily ceiling on generated answers (`apps/api/src/budget.py`).
 - **Run:** `bun run dev:web` → `http://localhost:3000`.
 
 ### Retrieval visualizer
@@ -253,8 +252,6 @@ Do not add LangChain, LangChain Community, or DeepEval dependencies.
 
 - `DATABASE_URL` — Postgres connection string.
 - `AUTH_SECRET` — Secret used to sign web app session cookies (≥32 chars required in production).
-- `ISRA_RESET_URL_BASE` — Base URL for password-reset links (default `http://localhost:3000/reset-password`).
-- `ISRA_SMTP_HOST` / `ISRA_SMTP_PORT` / `ISRA_SMTP_USER` / `ISRA_SMTP_PASS` / `ISRA_SMTP_FROM` — Optional SMTP config for sending password-reset emails. Leave unset in development to log reset links.
 - Langfuse keys for tracing.
 - LLM API keys for `/chat` and evals.
 
