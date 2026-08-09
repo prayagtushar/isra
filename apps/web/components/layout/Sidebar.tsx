@@ -20,6 +20,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { mode, topK, setMode, setTopK, showRetrievalTrace, setShowRetrievalTrace } = useSettings();
   const active = activeNav(pathname);
 
+  // Only the pages that retrieve get the retrieval controls. /startups browses
+  // the corpus and never calls the retriever, and /lab runs all three modes on
+  // purpose with its own Top K -- showing a mode selector on either implied a
+  // setting that changed nothing, next to a Top K that was not the one in use.
+  // Matched on the path rather than activeNav, which maps chat to "/" and so
+  // returns nothing for "/chat".
+  const showRetrievalControls =
+    pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/search");
+
   const startNewChat = () => {
     newConversation();
     router.push("/chat");
@@ -81,6 +90,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <div className="space-y-3 border-t border-line p-3">
+        {showRetrievalControls && (
         <div className="space-y-1.5">
           <p className="label px-0.5">Retrieval</p>
           <ModeSelector value={mode} onChange={setMode} />
@@ -110,7 +120,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </button>
           </div>
         </div>
-        <div className="flex items-center justify-between border-t border-line pt-3">
+        )}
+        <div
+          className={cn(
+            "flex items-center justify-between",
+            showRetrievalControls && "border-t border-line pt-3",
+          )}
+        >
           <span className="label">Theme</span>
           <ThemeToggle />
         </div>

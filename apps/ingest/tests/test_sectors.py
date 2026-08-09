@@ -33,6 +33,20 @@ class TestSpellingVariants:
     def test_case_alone_never_produces_two_sectors(self):
         assert normalize_sectors(["HOSPITALITY", "hospitality", "Hospitality"]) == ["Hospitality"]
 
+    def test_collapses_the_same_sector_named_at_three_lengths(self):
+        """All three appeared in one corpus of 107 companies, each on a single
+        company, so the filter listed three chips that meant one thing."""
+        assert normalize_sectors(
+            ["Social Network", "Social Network Service", "Social Networking Service"]
+        ) == ["Social Network"]
+
+    def test_corrects_a_misspelling_carried_in_from_the_source_page(self):
+        assert normalize_sectors(["Informational Technology"]) == ["Information Technology"]
+
+    def test_folds_a_narrower_restatement_into_its_sector(self):
+        assert normalize_sectors(["Payments", "Payment Gateway"]) == ["Payments"]
+        assert normalize_sectors(["Healthcare", "Healthcare Services"]) == ["Healthcare"]
+
 class TestThingsThatMustStaySeparate:
     def test_keeps_financial_services_apart_from_financial_technology(self):
         """A bank and a payments startup are not the same sector. Tidiness is

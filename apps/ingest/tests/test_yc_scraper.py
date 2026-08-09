@@ -40,6 +40,19 @@ def test_build_startup_fallback_description():
     assert "Y Combinator" in s.description
     assert "Razorpay" in s.description
 
+def test_build_startup_spaces_an_ampersand_the_company_ran_together():
+    """Verbatim from the directory: "rewards&flexible benefits". Left alone it
+    shows up that way on the card, and full-text search indexes
+    "rewards&flexible" as a token no query will ever match."""
+    s = build_startup(
+        _yc(
+            one_liner="Employee engagement with rewards&flexible benefits",
+            long_description="",
+        )
+    )
+    assert s.one_liner == "Employee engagement with rewards & flexible benefits"
+    assert "rewards & flexible" in s.description
+
 def test_founded_year_parses_batch():
     assert _founded_year("Summer 2012") == 2012
     assert _founded_year("Winter 2015") == 2015

@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { TopKControl } from "@/components/ui/TopKControl";
 import { Spinner } from "@/components/ui/Spinner";
 import { StateView } from "@/components/ui/StateView";
+import { ExampleQueries, LAB_EXAMPLES } from "@/components/ui/ExampleQueries";
+import { ScoreBar } from "@/components/ui/ScoreBar";
+import { channelStyle, type Channel } from "@/lib/channels";
 import { formatScore, truncate } from "@/lib/format";
 import { RETRIEVAL_MODES, type RetrievalMode, type Source } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -22,6 +25,22 @@ const BASELINE: Record<RetrievalMode, RetrievalMode | null> = {
   vector: null,
   hybrid: "vector",
   "hybrid+rerank": "hybrid",
+};
+
+/**
+ * Column colours, which deliberately differ from modeChannel.
+ *
+ * Elsewhere a hybrid result is drawn in ink, because on its own it is simply the
+ * ranking that came out. Here the three columns are read left to right as one
+ * pipeline, and what the middle column adds over the first is the keyword
+ * channel -- so amber names its contribution. Reusing modeChannel would paint
+ * hybrid and rerank the same ink and make two of the three columns
+ * indistinguishable, which is the one comparison this page exists to support.
+ */
+const COLUMN_CHANNEL: Record<RetrievalMode, Channel> = {
+  vector: "vector",
+  hybrid: "keyword",
+  "hybrid+rerank": "rerank",
 };
 
 type Results = Record<RetrievalMode, Source[]>;
@@ -40,9 +59,12 @@ export function LabView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const run = async () => {
-    const q = query.trim();
+  // Accepts an override so an example can be run in one click. Without it the
+  // click would only fill the box and the visitor would still have to press Run.
+  const run = async (override?: string) => {
+    const q = (override ?? query).trim();
     if (!q || loading) return;
+    if (override) setQuery(override);
     setLoading(true);
     setError(null);
     try {
@@ -81,7 +103,7 @@ export function LabView() {
             </div>
             <Button
               variant="primary"
-              onClick={run}
+              onClick={() => run()}
               disabled={!query.trim() || loading}
               className="min-w-[4.5rem]"
             >
@@ -92,9 +114,9 @@ export function LabView() {
             Compare how{" "}
             <span className="font-mono text-faint">vector</span> →{" "}
             <span className="font-mono text-faint">hybrid</span> →{" "}
-            <span className="font-mono text-faint">rerank</span> reorder the same
-            query. Arrows show each chunk&rsquo;s movement against the previous
-            mode.
+            <span className="font-mono text-faint">rerank</span>{" "}
+            reorder the same query. Arrows show each chunk&rsquo;s movement
+            against the previous mode.
           </p>
         </div>
       </div>
@@ -113,14 +135,16 @@ export function LabView() {
               icon={TriangleAlert}
               title="Lab run failed"
               hint={error}
-              action={{ label: "Try again", onClick: run }}
+              action={{ label: "Try again", onClick: () => run() }}
             />
           ) : !results ? (
             <StateView
               icon={Columns3}
               title="Compare retrieval modes side by side"
               hint="Run a query to see vector, hybrid, and rerank results next to each other — and exactly how rerank reorders them."
-            />
+            >
+              <ExampleQueries examples={LAB_EXAMPLES} onPick={(q) => run(q)} />
+            </StateView>
           ) : (
             <>
               <p className="label mb-3">Query · “{ranQuery}”</p>
@@ -153,10 +177,27 @@ function ModeColumn({
   list: Source[];
   baseline: Map<number, number> | null;
 }) {
+  const channel = COLUMN_CHANNEL[mode];
+  // Per column: RRF scores sit near 0.03 while cosine and cross-encoder scores
+  // sit near 0.7, so a bar scaled across all three modes would flatten hybrid to
+  // nothing. Within a column the bars compare the thing worth comparing --
+  // how far each result trails the one above it.
+  const maxScore = list.length > 0 ? Math.max(...list.map((s) => s.score)) : 0;
+
   return (
     <div className="overflow-hidden rounded-card border border-line bg-panel">
+      <div
+        className="h-0.5 w-full"
+        style={channelStyle(channel)}
+        aria-hidden
+      />
       <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
-        <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink">
+        <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-ink">
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-full"
+            style={channelStyle(channel)}
+            aria-hidden
+          />
           {MODE_LABEL[mode]}
         </span>
         <span className="font-mono text-[10px] text-faint">
@@ -185,7 +226,13 @@ function ModeColumn({
                   {formatScore(s.score)}
                 </span>
               </div>
-              <p className="mt-1 pl-7 text-[12px] leading-snug text-muted">
+              <ScoreBar
+                score={s.score}
+                maxScore={maxScore}
+                channel={channel}
+                className="mt-1.5"
+              />
+              <p className="mt-1.5 text-[12px] leading-snug text-muted">
                 {truncate(s.text, 110)}
               </p>
             </li>
@@ -206,14 +253,18 @@ function RankDelta({
   hasBaseline: boolean;
 }) {
   if (!hasBaseline) return <span className="w-9 shrink-0" />;
+
+  // This column's effect on the ranking is the finding the lab exists to show,
+  // so it is the one thing here drawn in colour. Promotions and new entries are
+  // what a stage contributes; demotions are what it takes away, and recede.
   if (previous == null) {
     return (
-      <span className="inline-flex w-9 shrink-0 justify-start font-mono text-[9px] uppercase tracking-wider text-faint">
+      <span className="inline-flex w-9 shrink-0 justify-start font-mono text-[9px] uppercase tracking-wider text-keyword">
         new
       </span>
     );
   }
-  const delta = previous - current; 
+  const delta = previous - current;
   if (delta === 0) {
     return (
       <span className="w-9 shrink-0 font-mono text-[10px] text-faint">—</span>
@@ -223,9 +274,14 @@ function RankDelta({
   return (
     <span
       className={cn(
-        "inline-flex w-9 shrink-0 items-center gap-0.5 font-mono text-[10px] tabular-nums",
-        up ? "text-ink" : "text-muted",
+        "inline-flex w-9 shrink-0 items-center gap-0.5 font-mono text-[10px] font-medium tabular-nums",
+        up ? "text-accent" : "text-faint",
       )}
+      title={
+        up
+          ? `Promoted ${delta} place${delta > 1 ? "s" : ""} by this stage`
+          : `Pushed down ${Math.abs(delta)} place${Math.abs(delta) > 1 ? "s" : ""} by this stage`
+      }
     >
       {up ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
       {Math.abs(delta)}

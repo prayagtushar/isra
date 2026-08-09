@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+import { fetchStartups } from "@/lib/api";
+
 /**
  * The arrival screen. This is the whole first impression now that there is no
  * landing page, so it has to answer three questions before the visitor types
@@ -27,6 +31,15 @@ const EXAMPLES = [
 ];
 
 export function EmptyState({ onPick }: { onPick: (q: string) => void }) {
+  // Counted from the corpus rather than written into the copy: the number
+  // changes on every ingest, and the hardcoded 111 was already wrong.
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    fetchStartups({ limit: 1 })
+      .then((res) => setCount(res.total))
+      .catch(() => setCount(null));
+  }, []);
+
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-2xl">
@@ -34,7 +47,8 @@ export function EmptyState({ onPick }: { onPick: (q: string) => void }) {
           Indian Startup Ecosystem RAG
         </h1>
         <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.14em] text-faint">
-          111 startups · Y Combinator + Wikipedia · 384-dim embeddings
+          {count === null ? "Indian startups" : `${count} startups`} · Y Combinator +
+          Wikipedia · 384-dim embeddings
         </p>
         <p className="prose-human mt-4 max-w-xl text-[14px] leading-relaxed text-muted">
           Ask a question and vector search and keyword search run side by side,

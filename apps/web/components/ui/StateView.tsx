@@ -6,11 +6,14 @@ export function StateView({
   title,
   hint,
   action,
+  children,
 }: {
   icon?: LucideIcon;
   title: string;
   hint?: string;
   action?: { label: string; onClick: () => void };
+  /** Extra affordances below the hint, e.g. example queries to click. */
+  children?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
@@ -22,6 +25,7 @@ export function StateView({
           {action.label}
         </Button>
       )}
+      {children}
     </div>
   );
 }

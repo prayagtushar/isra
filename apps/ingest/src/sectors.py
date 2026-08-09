@@ -40,6 +40,29 @@ _SYNONYMS = {
     "softwareasaservice": "SaaS",
     "logistics": "Supply Chain and Logistics",
     "supplychainandlogistics": "Supply Chain and Logistics",
+    # The two sources describe the same sector at different lengths.
+    "socialnetwork": "Social Network",
+    "socialnetworkservice": "Social Network",
+    "socialnetworkingservice": "Social Network",
+    "informationtechnology": "Information Technology",
+    "informationaltechnology": "Information Technology",  # as spelled on the source page
+    "healthcare": "Healthcare",
+    "healthcareservices": "Healthcare",
+    "paymentgateway": "Payments",
+    "payments": "Payments",
+    "humanresources": "Human Resources",
+    "recruitingandtalent": "Human Resources",
+    "jobandcareerservices": "Human Resources",
+    "foodandbeverage": "Food and Beverage",
+    "foodindustry": "Food and Beverage",
+    "restaurants": "Food and Beverage",
+    "realestate": "Real Estate",
+    "housingandrealestate": "Real Estate",
+    "realestateandconstruction": "Real Estate",
+    "manufacturing": "Manufacturing",
+    "manufacturingandrobotics": "Manufacturing",
+    "softwareandservices": "Software and Services",
+    "softwarecompany": "Software and Services",
 }
 
 # Words whose casing Title Case gets wrong.

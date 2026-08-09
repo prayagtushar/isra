@@ -9,6 +9,7 @@ import { ModeSelector } from "@/components/ui/ModeSelector";
 import { TopKControl } from "@/components/ui/TopKControl";
 import { Spinner } from "@/components/ui/Spinner";
 import { StateView } from "@/components/ui/StateView";
+import { ExampleQueries, SEARCH_EXAMPLES } from "@/components/ui/ExampleQueries";
 import { ResultRow } from "./ResultRow";
 import { modeChannel } from "@/lib/channels";
 import type { Source } from "@/lib/types";
@@ -21,9 +22,12 @@ export function SearchView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const run = async () => {
-    const q = query.trim();
+  // Accepts an override so an example runs in one click rather than only
+  // filling the box.
+  const run = async (override?: string) => {
+    const q = (override ?? query).trim();
     if (!q || loading) return;
+    if (override) setQuery(override);
     setLoading(true);
     setError(null);
     try {
@@ -58,7 +62,7 @@ export function SearchView() {
             </div>
             <Button
               variant="primary"
-              onClick={run}
+              onClick={() => run()}
               disabled={!query.trim() || loading}
               className="min-w-[5rem]"
             >
@@ -89,14 +93,16 @@ export function SearchView() {
               icon={TriangleAlert}
               title="Search failed"
               hint={error}
-              action={{ label: "Try again", onClick: run }}
+              action={{ label: "Try again", onClick: () => run() }}
             />
           ) : results === null ? (
             <StateView
               icon={SearchIcon}
               title="Inspect the retrieval pipeline"
               hint="Run a query to see the ranked chunks, their scores, and sources — straight from /search."
-            />
+            >
+              <ExampleQueries examples={SEARCH_EXAMPLES} onPick={(q) => run(q)} />
+            </StateView>
           ) : results.length === 0 ? (
             <StateView
               icon={SearchIcon}

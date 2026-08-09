@@ -20,12 +20,23 @@ def _founded_year(batch: str | None) -> int | None:
     match = _YEAR_RE.search(batch)
     return int(match.group()) if match else None
 
+def _tidy(text: str) -> str:
+    """Repair spacing in copy the companies wrote themselves.
+
+    These are self-submitted blurbs, and a few run words together around an
+    ampersand -- "rewards&flexible benefits" appears verbatim on a card. Spacing
+    it also helps full-text search, which would otherwise index
+    "rewards&flexible" as one token that no query will match.
+    """
+    text = re.sub(r"(?<=\w)&(?=\w)", " & ", text)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
 def build_startup(company: dict) -> Startup:
     """Map one yc-oss company record onto the Startup model."""
     name = (company.get("name") or "").strip()
     slug = company.get("slug")
 
-    description = (company.get("long_description") or company.get("one_liner") or "").strip()
+    description = _tidy(company.get("long_description") or company.get("one_liner") or "")
     if len(description) < 5:
         industries = company.get("industries") or ["technology"]
         batch = company.get("batch") or "an unknown batch"
@@ -43,7 +54,7 @@ def build_startup(company: dict) -> Startup:
     return Startup(
         name=name,
         normalized_name=name,                       # schema normalizes to lowercase alphanumerics
-        one_liner=company.get("one_liner") or None,
+        one_liner=_tidy(company.get("one_liner") or "") or None,
         source_url=source_url,
         description=description,
         founders=["Unknown"],                       # yc-oss records carry no founder names

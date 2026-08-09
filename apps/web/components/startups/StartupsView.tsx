@@ -10,6 +10,15 @@ import { StartupDrawer } from "./StartupDrawer";
 import { cn } from "@/lib/cn";
 import type { Startup } from "@/lib/types";
 
+// The whole corpus, which is the endpoint's ceiling. It was 100, which silently
+// hid every company past the hundredth and reported the page size as the total.
+const CORPUS_LIMIT = 200;
+
+// Sectors shown before the filter is asked to expand. The corpus carries about
+// seventy, more than half of them on a single company, so listing all of them
+// puts a wall of chips above the results and buries the ones worth clicking.
+const VISIBLE_SECTORS = 12;
+
 export function StartupsView() {
   const [all, setAll] = useState<Startup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,11 +26,12 @@ export function StartupsView() {
   const [q, setQ] = useState("");
   const [sector, setSector] = useState<string | null>(null);
   const [selected, setSelected] = useState<Startup | null>(null);
+  const [allSectors, setAllSectors] = useState(false);
 
   const load = () => {
     setLoading(true);
     setError(null);
-    fetchStartups({ limit: 100 })
+    fetchStartups({ limit: CORPUS_LIMIT })
       .then((res) => setAll(res.startups))
       .catch((e) => setError((e as Error).message || "Couldn’t load startups."))
       .finally(() => setLoading(false));
@@ -29,10 +39,30 @@ export function StartupsView() {
 
   useEffect(load, []);
 
-  const sectors = useMemo(
-    () => Array.from(new Set(all.flatMap((s) => s.sectors))).sort(),
-    [all],
-  );
+  // Ordered by how many companies each sector holds, so the chips that filter
+  // to something substantial come first. Alphabetical order put "Adware", which
+  // matches one company, ahead of "Financial Technology", which matches twenty.
+  const sectors = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const startup of all) {
+      for (const sec of startup.sectors) counts.set(sec, (counts.get(sec) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ name, count }));
+  }, [all]);
+
+  // A selected sector stays visible even when collapsed, so the active filter is
+  // never a chip the reader cannot see.
+  const shownSectors = useMemo(() => {
+    if (allSectors) return sectors;
+    const head = sectors.slice(0, VISIBLE_SECTORS);
+    if (sector && !head.some((s) => s.name === sector)) {
+      const active = sectors.find((s) => s.name === sector);
+      if (active) return [...head, active];
+    }
+    return head;
+  }, [sectors, allSectors, sector]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -67,19 +97,28 @@ export function StartupsView() {
             />
           </div>
           {sectors.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <SectorChip active={sector === null} onClick={() => setSector(null)}>
-                All
+                All <span className="opacity-60">{all.length}</span>
               </SectorChip>
-              {sectors.map((sec) => (
+              {shownSectors.map((sec) => (
                 <SectorChip
-                  key={sec}
-                  active={sector === sec}
-                  onClick={() => setSector(sector === sec ? null : sec)}
+                  key={sec.name}
+                  active={sector === sec.name}
+                  onClick={() => setSector(sector === sec.name ? null : sec.name)}
                 >
-                  {sec}
+                  {sec.name} <span className="opacity-60">{sec.count}</span>
                 </SectorChip>
               ))}
+              {sectors.length > VISIBLE_SECTORS && (
+                <button
+                  type="button"
+                  onClick={() => setAllSectors((open) => !open)}
+                  className="rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-faint underline decoration-dotted underline-offset-4 transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+                >
+                  {allSectors ? "Fewer sectors" : `All ${sectors.length} sectors`}
+                </button>
+              )}
             </div>
           )}
         </div>
