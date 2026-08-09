@@ -415,19 +415,44 @@ def scrape_startups(limit: int | None = None, fetch_articles: bool = True) -> li
 
     return startups
 
-def seed_details() -> list[Startup]:
-    slugs = [
-        ("Ola_Electric", "Ola Electric"),
-        ("Zomato", "Zomato"),
-        ("Razorpay", "Razorpay"),
-        ("Zerodha", "Zerodha"),
-        ("PharmEasy", "PharmEasy"),
-    ]
+# Well-known Indian companies that the unicorn list does not reliably yield --
+# some have exited unicorn status, some sit in a table shape the parser skips,
+# some are named differently there. Without this they were missing from the
+# corpus entirely, and hand-written records stood in for four of them.
+NOTABLE_NAMES = [
+    "Ola Electric",
+    "Paytm",
+    "PharmEasy",
+    "Zomato",
+    "Zepto",
+    "Zerodha",
+    "Swiggy",
+    "Flipkart",
+]
 
+def seed_details() -> list[Startup]:
+    """Scrape the well-known companies the unicorn list misses.
+
+    Names, not slugs: the article title is resolved at run time, so a company
+    renamed on Wikipedia is followed rather than 404ing on a slug frozen into
+    this file.
+
+    A name with no article is skipped rather than stubbed. These records exist
+    only to add companies the main scrape missed, and a stub adds a name with
+    nothing to retrieve -- if the company is on the unicorn list, that pass
+    already produced its stub with a valuation attached, and emitting a second
+    thinner copy here would only give merge_startups something worse to choose
+    from.
+    """
     result: list[Startup] = []
-    for slug, name in slugs:
+    for name in NOTABLE_NAMES:
         try:
-            result.append(scrape_wikipedia(slug, name))
-        except Exception as e:
-            print(f"Failed to scrape {slug}: {e}")
+            slug = _lookup_slug(name)
+            if not slug:
+                print(f"no article for {name}; leaving it to the unicorn list")
+                continue
+            article = _fetch(f"https://en.wikipedia.org/wiki/{slug}")
+            result.append(build_startup(UnicornRecord(name=name, slug=slug), article))
+        except Exception as exc:
+            print(f"failed to scrape {name}: {exc}")
     return result

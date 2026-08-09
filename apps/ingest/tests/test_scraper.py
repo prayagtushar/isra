@@ -9,6 +9,7 @@ from src.scraper import (
     parse_infobox,
     parse_unicorn_table,
     resolve_slug,
+    seed_details,
 )
 
 LIST_HTML = """
@@ -317,6 +318,31 @@ def test_resolve_slug_follows_a_redirect_even_to_an_unrecognizable_name():
         "Zomato", _titles(("Eternal Limited", True), redirects={"Zomato": "Eternal Limited"})
     )
     assert resolved == "Eternal_Limited"
+
+def test_seed_details_scrapes_by_name_and_skips_what_has_no_article():
+    """These records exist to add companies the unicorn list misses. Before
+    this, four of them were hand-written fixtures in the corpus with company
+    homepages as their sources.
+
+    A name with no article is skipped rather than stubbed: a stub here adds a
+    name with nothing to retrieve, and if the company is on the unicorn list
+    that pass already produced its stub with a valuation attached.
+    """
+    from unittest.mock import patch
+
+    with (
+        patch("src.scraper._lookup_slug", side_effect=lambda n: None if n == "Paytm" else n),
+        patch("src.scraper._fetch", return_value=ARTICLE_HTML),
+        patch("src.scraper.NOTABLE_NAMES", ["Paytm", "Oyo"]),
+    ):
+        result = seed_details()
+
+    assert [s.name for s in result] == ["Oyo"]
+    # Built through build_startup, so it carries the article's lead and infobox
+    # rather than a raw text dump.
+    assert "hospitality chain" in result[0].description.lower()
+    assert result[0].founded_year == 2012
+    assert str(result[0].source_url).endswith("Oyo")
 
 def test_resolve_slug_prefers_a_matching_title_over_a_redirect():
     """Real case, and the reason title matches are checked first: "Zepto"

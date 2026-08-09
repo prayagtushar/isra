@@ -83,3 +83,35 @@ def test_cross_source_merge_dedupes_by_name():
     # equality, so before normalization this record carried both and the
     # /startups filter listed them as separate choices. One sector, one entry.
     assert sorted(m.sectors) == ["Financial Technology", "Payments"]
+
+    # The citation has to point at the page the description came from. YC's
+    # description won on length, so YC must be the source.
+    assert "ycombinator.com" in str(m.source_url)
+
+def test_merge_keeps_the_source_of_the_description_it_kept():
+    """Zepto shipped with Wikipedia's text above a Y Combinator link, because
+    the longest description won while source_url stayed with whichever record
+    was seen first. For a system that cites every answer, a citation pointing
+    at a page that does not contain the text is the worst kind of wrong."""
+    short = Startup(
+        name="Zepto",
+        normalized_name="Zepto",
+        source_url="https://www.ycombinator.com/companies/zepto",
+        description="Ten minute grocery delivery.",
+        founders=["Unknown"],
+    )
+    long = Startup(
+        name="Zepto",
+        normalized_name="Zepto",
+        source_url="https://en.wikipedia.org/wiki/Zepto_(company)",
+        description=(
+            "Zepto is an Indian quick-commerce company headquartered in Bengaluru. "
+            "It was founded in July 2021 by Aadit Palicha and Kaivalya Vohra."
+        ),
+        founders=["Aadit Palicha"],
+    )
+
+    for order in ([short, long], [long, short]):
+        m = merge_startups(order)[0]
+        assert "quick-commerce" in m.description
+        assert str(m.source_url).endswith("Zepto_(company)")

@@ -17,13 +17,13 @@ def test_uses_default_naive_chunker():
 
 @patch("src.runner.scrape_yc_startups")
 @patch("src.runner.scrape_startups")
-@patch("src.runner.sample_startups")
+@patch("src.runner.seed_details")
 @patch("src.runner.merge_startups")
 @patch("src.runner.embed_text")
 @patch("src.runner.load_startups_and_chunks")
 @patch("src.runner.psycopg.connect")
 def test_run_ingest_no_cache(
-    mock_connect, mock_load, mock_embed, mock_merge, mock_sample, mock_scrape, mock_yc
+    mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
 ):
     from src.schema import Startup
 
@@ -36,7 +36,7 @@ def test_run_ingest_no_cache(
     )
     mock_scrape.return_value = [s]
     mock_yc.return_value = []
-    mock_sample.return_value = [s]
+    mock_seed.return_value = []
     mock_merge.return_value = [s]
     mock_embed.return_value = [[1.0] * 384]
     mock_conn = MagicMock()
@@ -54,6 +54,35 @@ def test_run_ingest_no_cache(
     mock_merge.assert_called_once()
     mock_load.assert_called_once()
 
+@patch("src.runner.scrape_yc_startups")
+@patch("src.runner.scrape_startups")
+@patch("src.runner.seed_details")
+@patch("src.runner.merge_startups")
+@patch("src.runner.embed_text")
+@patch("src.runner.load_startups_and_chunks")
+@patch("src.runner.psycopg.connect")
+def test_run_ingest_refuses_to_seed_the_corpus_with_sample_data(
+    mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
+):
+    """When every source fails the run must stop, not substitute fixtures.
+
+    The old fallback called sample_startups(), and four of those hand-written
+    records reached the live corpus -- Paytm, Zomato, Ola Electric, PharmEasy,
+    carrying company homepages as their sources -- where nothing distinguished
+    them from scraped rows while the README described the corpus as Wikipedia
+    and Y Combinator. Loading nothing is obvious and recoverable; fabricated
+    rows are neither.
+    """
+    mock_scrape.return_value = []
+    mock_yc.return_value = []
+    mock_seed.return_value = []
+
+    with patch.dict(os.environ, {"DATABASE_URL": "postgresql://x"}):
+        with pytest.raises(RuntimeError, match="refusing to seed"):
+            run_ingest(use_cache=False, chunker="naive")
+
+    mock_load.assert_not_called()
+
 def test_cache_path_is_redirected_away_from_the_real_one():
     """The isolation itself, asserted rather than assumed. Without it a test's
     fixture companies land in the file a real ingest reads, and get upserted
@@ -65,13 +94,13 @@ def test_cache_path_is_redirected_away_from_the_real_one():
 
 @patch("src.runner.scrape_yc_startups")
 @patch("src.runner.scrape_startups")
-@patch("src.runner.sample_startups")
+@patch("src.runner.seed_details")
 @patch("src.runner.merge_startups")
 @patch("src.runner.embed_text")
 @patch("src.runner.load_startups_and_chunks")
 @patch("src.runner.psycopg.connect")
 def test_run_ingest_does_not_cache_a_partial_scrape(
-    mock_connect, mock_load, mock_embed, mock_merge, mock_sample, mock_scrape, mock_yc
+    mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
 ):
     """One source failing must not be written to the cache, or the next run
     loads the short corpus and never retries it. A truncated Y Combinator
@@ -87,7 +116,7 @@ def test_run_ingest_does_not_cache_a_partial_scrape(
     )
     mock_scrape.return_value = [s]
     mock_yc.side_effect = RuntimeError("peer closed connection")
-    mock_sample.return_value = [s]
+    mock_seed.return_value = []
     mock_merge.return_value = [s]
     mock_embed.return_value = [[1.0] * 384]
     mock_conn = MagicMock()
@@ -104,13 +133,13 @@ def test_run_ingest_does_not_cache_a_partial_scrape(
 
 @patch("src.runner.scrape_yc_startups")
 @patch("src.runner.scrape_startups")
-@patch("src.runner.sample_startups")
+@patch("src.runner.seed_details")
 @patch("src.runner.merge_startups")
 @patch("src.runner.embed_text")
 @patch("src.runner.load_startups_and_chunks")
 @patch("src.runner.psycopg.connect")
 def test_run_ingest_cache_persists(
-    mock_connect, mock_load, mock_embed, mock_merge, mock_sample, mock_scrape, mock_yc
+    mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
 ):
     from src.schema import Startup
 
@@ -123,7 +152,7 @@ def test_run_ingest_cache_persists(
     )
     mock_scrape.return_value = [s]
     mock_yc.return_value = []
-    mock_sample.return_value = [s]
+    mock_seed.return_value = []
     mock_merge.return_value = [s]
     mock_embed.return_value = [[1.0] * 384]
     mock_conn = MagicMock()
@@ -146,13 +175,13 @@ def test_run_ingest_cache_persists(
 
 @patch("src.runner.scrape_yc_startups")
 @patch("src.runner.scrape_startups")
-@patch("src.runner.sample_startups")
+@patch("src.runner.seed_details")
 @patch("src.runner.merge_startups")
 @patch("src.runner.embed_text")
 @patch("src.runner.load_startups_and_chunks")
 @patch("src.runner.psycopg.connect")
 def test_run_ingest_prefixes_chunks_with_startup_name(
-    mock_connect, mock_load, mock_embed, mock_merge, mock_sample, mock_scrape, mock_yc
+    mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
 ):
     # YC-style descriptions are first-person ("We deliver groceries...") and
     # never mention the company, so name queries miss both FTS and the
@@ -176,7 +205,7 @@ def test_run_ingest_prefixes_chunks_with_startup_name(
     )
     mock_scrape.return_value = [zepto, oyo]
     mock_yc.return_value = []
-    mock_sample.return_value = [zepto, oyo]
+    mock_seed.return_value = []
     mock_merge.return_value = [zepto, oyo]
     mock_embed.side_effect = lambda texts: [[1.0] * 384 for _ in texts]
     mock_conn = MagicMock()

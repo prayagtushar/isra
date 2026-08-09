@@ -11,8 +11,7 @@ from src.chunker import naive_chunk, semantic_chunk
 from src.embedder import embed_text
 from src.loader import load_startups_and_chunks
 from src.merge import merge_startups
-from src.sample_data import sample_startups
-from src.scraper import scrape_startups
+from src.scraper import scrape_startups, seed_details
 from src.yc_scraper import scrape_yc_startups
 from src.schema import Startup
 
@@ -83,6 +82,12 @@ def _scrape_all(limit: int | None) -> tuple[List[Startup], List[str]]:
         print(f"yc scrape failed: {exc}")
         failed.append("yc")
 
+    try:
+        scraped += seed_details()                          # named companies the list misses
+    except Exception as exc:
+        print(f"notable scrape failed: {exc}")
+        failed.append("notable")
+
     return scraped, failed
 
 def run_ingest(
@@ -109,7 +114,16 @@ def run_ingest(
     if not startup_cache:
         scraped, failed = _scrape_all(limit)
         if not scraped:
-            scraped = sample_startups()
+            # Deliberately not falling back to sample_startups(). That fallback
+            # put four hand-written records into the live corpus -- Paytm,
+            # Zomato, Ola Electric, PharmEasy, with company homepages as their
+            # sources -- where they sat indistinguishable from scraped ones
+            # while the README said the corpus came from Wikipedia and Y
+            # Combinator. Loading nothing is recoverable and obvious; fabricated
+            # rows are neither. The fixtures remain in sample_data for tests.
+            raise RuntimeError(
+                "every source failed; refusing to seed the corpus with sample data"
+            )
         startup_cache = merge_startups(scraped)   # dedupe across sources by normalized_name
         if failed:
             # Caching a partial scrape makes the gap permanent: the next run
