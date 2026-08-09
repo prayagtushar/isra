@@ -1,12 +1,41 @@
-{"question": "Which Indian startup builds electric scooters?", "expected": "olaelectric"}
-{"question": "What does PharmEasy do?", "expected": "pharmeasy"}
-{"question": "Which company runs UPI payments and a mobile wallet?", "expected": "paytm"}
-{"question": "Where can I order food online in India?", "expected": "zomato"}
-{"question": "Which Indian fintech is known for its payment gateway for businesses?", "expected": "razorpay"}
-{"question": "Which platform is popular for stock trading and investing in India?", "expected": "zerodha"}
-{"question": "Which Indian startup offers a credit-card bill payment and rewards app?", "expected": "cred"}
-{"question": "Which company runs a budget hotel booking network?", "expected": "oyo"}
-{"question": "Which Indian startup is a fantasy sports platform?", "expected": "dream11"}
-{"question": "Which Indian startup makes a popular API development and testing platform?", "expected": "postman"}
-{"question": "Which company lets people rent or buy homes directly without paying broker commission?", "expected": "nobroker"}
-{"question": "Which Indian startup provides a cloud platform for testing websites across browsers?", "expected": "browserstack"}
+{"question": "Which Indian startup manufactures electric two-wheelers?", "expected": ["olaelectric"], "category": "direct", "match": "any"}
+{"question": "What does PharmEasy do?", "expected": ["pharmeasy"], "category": "direct", "match": "any"}
+{"question": "Which company runs UPI payments and a mobile wallet?", "expected": ["paytm"], "category": "direct", "match": "any"}
+{"question": "Which Indian startup is a fantasy sports platform?", "expected": ["dream11"], "category": "direct", "match": "any"}
+{"question": "Which Indian company makes an API development and testing platform?", "expected": ["postman"], "category": "direct", "match": "any"}
+{"question": "Which company lets people rent or buy homes without paying broker commission?", "expected": ["nobroker"], "category": "direct", "match": "any"}
+{"question": "Which Indian company provides cloud-based cross-browser testing?", "expected": ["browserstack"], "category": "direct", "match": "any"}
+{"question": "Which company runs a budget hotel booking network?", "expected": ["oyo"], "category": "direct", "match": "any"}
+{"question": "Which company offers 10-minute grocery delivery in India?", "expected": ["zepto"], "category": "direct", "match": "any"}
+{"question": "Which Indian startup offers a credit-card bill payment and rewards app?", "expected": ["cred"], "category": "direct", "match": "any"}
+{"question": "Which company describes itself as India's largest EV charging network?", "expected": ["statiq"], "category": "direct", "match": "any"}
+{"question": "Which Indian startup is an AI recruiter for blue-collar workers?", "expected": ["vahan"], "category": "direct", "match": "any"}
+{"question": "i want to order medicines online in india, which app does that?", "expected": ["pharmeasy"], "category": "paraphrase", "match": "any"}
+{"question": "razor pay - what exactly do they do?", "expected": ["razorpay"], "category": "paraphrase", "match": "any"}
+{"question": "where do retail investors in India buy stocks cheaply?", "expected": ["zerodha", "groww", "upstox"], "category": "paraphrase", "match": "any"}
+{"question": "the food delivery company headquartered in Gurugram", "expected": ["zomato"], "category": "paraphrase", "match": "any"}
+{"question": "which company helps small shopkeepers keep their ledger digitally?", "expected": ["khatabook", "okcredit"], "category": "paraphrase", "match": "any"}
+{"question": "i heard about a co-working office space startup in Delhi", "expected": ["innov8"], "category": "paraphrase", "match": "any"}
+{"question": "who does employee background verification for hiring in india?", "expected": ["helloverify"], "category": "paraphrase", "match": "any"}
+{"question": "app for buying and selling second-hand cars", "expected": ["cars24", "spinny", "cardekho", "droom"], "category": "paraphrase", "match": "any"}
+{"question": "corporate credit cards for Indian companies", "expected": ["karboncard", "onecard"], "category": "paraphrase", "match": "any"}
+{"question": "online after-school where kids learn to code", "expected": ["codingal"], "category": "paraphrase", "match": "any"}
+{"question": "hormone tracking you can do at home", "expected": ["inito"], "category": "paraphrase", "match": "any"}
+{"question": "Which companies in the corpus are cryptocurrency exchanges?", "expected": ["coindcx", "coinswitchkuber"], "category": "multi_hop", "match": "all"}
+{"question": "Which companies provide diagnostics and pathology lab services in India?", "expected": ["orangehealthlabs", "redcliffelifetech"], "category": "multi_hop", "match": "all"}
+{"question": "Which companies offer payment gateway infrastructure for businesses?", "expected": ["razorpay", "cashfreepayments"], "category": "multi_hop", "match": "all"}
+{"question": "Which education startups are based in Gurugram?", "expected": ["acciojob", "novatr"], "category": "multi_hop", "match": "all"}
+{"question": "Which startups work on agriculture and farming supply chains?", "expected": ["kisannetwork", "urbankisaan"], "category": "multi_hop", "match": "all"}
+{"question": "Which companies operate B2B e-commerce marketplaces for businesses?", "expected": ["udaan", "ofbusiness"], "category": "multi_hop", "match": "all"}
+{"question": "Which startups are in the used-car marketplace business?", "expected": ["cars24", "spinny"], "category": "multi_hop", "match": "all"}
+{"question": "Which companies work on housing and real estate in India?", "expected": ["ivyhomes", "ziffyhomes"], "category": "multi_hop", "match": "all"}
+{"question": "Which Indian startup builds reusable orbital rocket launch vehicles?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "What was Flipkart's valuation at its most recent funding round?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "Which Indian startup manufactures semiconductor fabrication equipment?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "How many employees does Razorpay currently have?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "What is Zomato's share price today?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "Which Indian quick-commerce company was founded in Chennai in 1998?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "Which Indian startup operates a chain of physical bookstores?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "What is BrowserStack's annual revenue?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "Which Indian startup is developing nuclear fusion reactors?", "expected": [], "category": "unanswerable", "match": "any"}
+{"question": "Which company acquired PharmEasy in 2024?", "expected": [], "category": "unanswerable", "match": "any"}

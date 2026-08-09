@@ -64,6 +64,21 @@ def context_precision_prompt(question: str, contexts: Sequence[str]) -> str:
         'Respond with JSON only: {"score": <float 0..1>, "reason": "<short>"}'
     )
 
+def abstention_prompt(question: str, answer: str) -> str:
+    return (
+        "You are grading whether an ANSWER correctly declines to answer.\n"
+        "The knowledge base provably does NOT contain the information needed to "
+        "answer the QUESTION. The only correct behaviour is to say so.\n"
+        "Score 1.0 if the answer clearly states it does not know or that the "
+        "information is not in the provided context. Score 0.0 if it asserts a "
+        "specific factual answer anyway. Score in between if it hedges but still "
+        "implies an answer.\n\n"
+        f"QUESTION:\n{question}\n\n"
+        f"ANSWER:\n{answer}\n\n"
+        'Respond with JSON only: {"score": <float 0..1>, "reason": "<short>"}'
+    )
+
+
 @dataclass
 class ItemScore:
     question: str
@@ -71,19 +86,34 @@ class ItemScore:
     faithfulness: float | None
     answer_relevancy: float | None
     context_precision: float | None
+    # Only scored for unanswerable questions: did the model correctly abstain?
+    abstention: float | None = None
+    answerable: bool = True
 
 @dataclass
 class GenerationReport:
     mode: str
     items: list[ItemScore] = field(default_factory=list)
 
+    def _applicable(self, metric: str) -> list[ItemScore]:
+        # Abstention is only attempted on unanswerable questions and the quality
+        # metrics only on answerable ones, so coverage must not divide by the
+        # whole set — that would report a permanent, meaningless shortfall.
+        wants_answerable = metric != "abstention"
+        return [i for i in self.items if i.answerable is wants_answerable]
+
     def mean(self, metric: str) -> float | None:
-        vals = [v for i in self.items if (v := getattr(i, metric)) is not None]
+        vals = [
+            v
+            for i in self._applicable(metric)
+            if (v := getattr(i, metric)) is not None
+        ]
         return sum(vals) / len(vals) if vals else None
 
     def coverage(self, metric: str) -> tuple[int, int]:
-        scored = sum(1 for i in self.items if getattr(i, metric) is not None)
-        return scored, len(self.items)
+        applicable = self._applicable(metric)
+        scored = sum(1 for i in applicable if getattr(i, metric) is not None)
+        return scored, len(applicable)
 
 async def evaluate_generation(
     items: Sequence[GoldenItem],
@@ -99,6 +129,25 @@ async def evaluate_generation(
         chunks = retrieve(item.question, top_k=top_k, mode=mode)
         contexts = _format_contexts(chunks)
         answer = await generate_answer(client, model, item.question, chunks)
+
+        if not item.answerable:
+            # Faithfulness and relevancy have no meaning without a correct
+            # answer; the only thing worth grading is whether it abstained.
+            report.items.append(
+                ItemScore(
+                    question=item.question,
+                    answer=answer,
+                    faithfulness=None,
+                    answer_relevancy=None,
+                    context_precision=None,
+                    abstention=await score_with_judge(
+                        judge, abstention_prompt(item.question, answer)
+                    ),
+                    answerable=False,
+                )
+            )
+            continue
+
         report.items.append(
             ItemScore(
                 question=item.question,
@@ -112,6 +161,8 @@ async def evaluate_generation(
                 context_precision=await score_with_judge(
                     judge, context_precision_prompt(item.question, contexts)
                 ),
+                abstention=None,
+                answerable=True,
             )
         )
     return report

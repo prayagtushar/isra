@@ -8,10 +8,13 @@ _GEN_METRICS = [
     ("faithfulness", "Faithfulness"),
     ("answer_relevancy", "Answer Relevancy"),
     ("context_precision", "Context Precision"),
+    ("abstention", "Abstention (unanswerable only)"),
 ]
+
 
 def _fmt(x: float | None) -> str:
     return f"{x:.3f}" if x is not None else "n/a"
+
 
 def render_markdown(
     meta: dict, mode_results: list[ModeResult], gen: GenerationReport | None
@@ -27,11 +30,35 @@ def render_markdown(
 
     lines.append("## Retrieval mode comparison")
     lines.append("")
-    lines.append("| Mode | hit@k | MRR |")
-    lines.append("|------|-------|-----|")
-    for r in mode_results:
-        lines.append(f"| {r.mode} | {r.hit_at_k:.3f} | {r.mrr:.3f} |")
+    lines.append(
+        "Scored on answerable questions only. `hit@k` requires every expected "
+        "entity for multi-hop questions; `recall@k` gives partial credit."
+    )
     lines.append("")
+    lines.append("| Mode | hit@k | recall@k | MRR |")
+    lines.append("|------|-------|----------|-----|")
+    for r in mode_results:
+        lines.append(
+            f"| {r.mode} | {r.hit_at_k:.3f} | {r.recall_at_k:.3f} | {r.mrr:.3f} |"
+        )
+    lines.append("")
+
+    categories = sorted({c for r in mode_results for c in r.by_category})
+    if categories:
+        lines.append("### By question category")
+        lines.append("")
+        header = "| Mode | " + " | ".join(categories) + " |"
+        lines.append(header)
+        lines.append("|------|" + "|".join(["------"] * len(categories)) + "|")
+        for r in mode_results:
+            cells = []
+            for category in categories:
+                cat = r.by_category.get(category)
+                cells.append(
+                    f"{cat.hit_at_k:.3f} (n={cat.n})" if cat else "n/a"
+                )
+            lines.append(f"| {r.mode} | " + " | ".join(cells) + " |")
+        lines.append("")
 
     lines.append("## Generation quality")
     lines.append("")
@@ -50,13 +77,29 @@ def render_markdown(
     lines.append("")
     return "\n".join(lines)
 
+
 def build_json(
     meta: dict, mode_results: list[ModeResult], gen: GenerationReport | None
 ) -> dict:
     out: dict = {
         "meta": meta,
         "retrieval": [
-            {"mode": r.mode, "hit_at_k": r.hit_at_k, "mrr": r.mrr, "n": r.n}
+            {
+                "mode": r.mode,
+                "hit_at_k": r.hit_at_k,
+                "recall_at_k": r.recall_at_k,
+                "mrr": r.mrr,
+                "n": r.n,
+                "by_category": {
+                    name: {
+                        "hit_at_k": c.hit_at_k,
+                        "recall_at_k": c.recall_at_k,
+                        "mrr": c.mrr,
+                        "n": c.n,
+                    }
+                    for name, c in r.by_category.items()
+                },
+            }
             for r in mode_results
         ],
         "generation": None,
@@ -73,11 +116,13 @@ def build_json(
                     "faithfulness": i.faithfulness,
                     "answer_relevancy": i.answer_relevancy,
                     "context_precision": i.context_precision,
+                    "abstention": i.abstention,
                 }
                 for i in gen.items
             ],
         }
     return out
+
 
 def write_report(
     out_path: Path,

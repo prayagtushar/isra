@@ -16,7 +16,7 @@ from src.retrieval_eval import evaluate_modes
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_MODES = ["vector", "hybrid", "hybrid+rerank"]
-_GEN_MODE = "hybrid+rerank"
+_GEN_MODE = "vector"
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="evals")
@@ -24,6 +24,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--no-generation", action="store_true")
     p.add_argument("--modes", type=str, default=",".join(_DEFAULT_MODES))
     p.add_argument("--top-k", type=int, default=5)
+    p.add_argument(
+        "--gen-mode",
+        type=str,
+        default=_GEN_MODE,
+        help="Retrieval mode used for generation scoring (default: the shipped default).",
+    )
     p.add_argument("--out", type=str, default=str(_REPO_ROOT / "EVALUATION.md"))
     return p.parse_args(argv)
 
@@ -50,7 +56,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     for r in mode_results:
-        print(f"  {r.mode:>14}  hit@{args.top_k}={r.hit_at_k:.3f}  MRR={r.mrr:.3f}")
+        print(
+            f"  {r.mode:>14}  hit@{args.top_k}={r.hit_at_k:.3f}  "
+            f"recall@{args.top_k}={r.recall_at_k:.3f}  MRR={r.mrr:.3f}"
+        )
+        for name, cat in r.by_category.items():
+            print(
+                f"    {name:>14}  hit@{args.top_k}={cat.hit_at_k:.3f}  "
+                f"recall@{args.top_k}={cat.recall_at_k:.3f}  n={cat.n}"
+            )
 
     gen = None
     if args.no_generation:
@@ -58,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     elif not settings.openrouter_api_key:
         print("ISRA_OPENROUTER_API_KEY not set; skipping generation scoring.")
     else:
-        print(f"Scoring generation on `{_GEN_MODE}` with LLM-judge ...")
+        print(f"Scoring generation on `{args.gen_mode}` with LLM-judge ...")
         client = AsyncOpenAI(
             base_url=settings.openrouter_base_url,
             api_key=settings.openrouter_api_key,
@@ -69,14 +83,19 @@ def main(argv: list[str] | None = None) -> int:
         gen = asyncio.run(
             evaluate_generation(
                 items,
-                mode=_GEN_MODE,
+                mode=args.gen_mode,
                 top_k=args.top_k,
                 judge=judge,
                 client=client,
                 model=settings.llm_model,
             )
         )
-        for attr in ("faithfulness", "answer_relevancy", "context_precision"):
+        for attr in (
+            "faithfulness",
+            "answer_relevancy",
+            "context_precision",
+            "abstention",
+        ):
             scored, total = gen.coverage(attr)
             print(f"  {attr:>18}  mean={gen.mean(attr)}  coverage={scored}/{total}")
 
