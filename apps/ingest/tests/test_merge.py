@@ -38,7 +38,8 @@ def test_merge_dedupes_and_unions_fields():
     m = merged[0]
     assert m.normalized_name == "zomato"
     assert set(m.founders) == {"Deepinder Goyal", "Pankaj Chaddah"}
-    assert set(m.sectors) == {"Foodtech", "E-commerce"}
+    # Canonical spellings, not the ones the sources happened to use.
+    assert set(m.sectors) == {"Foodtech", "E-Commerce"}
     assert m.description == b.description  
     assert m.fundings == 2.5  
     assert m.founded_year == 2008

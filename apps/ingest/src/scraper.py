@@ -1,5 +1,6 @@
+import copy
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import List
 
@@ -7,6 +8,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from src.schema import Startup
+from src.sectors import normalize_sectors
 
 USER_AGENT = "ISRA-Bot/0.1 {+https://github.com/prayagtushar/isra.git}"
 
@@ -34,6 +36,36 @@ def _clean(value: str) -> str:
 def _split_multi(value: str) -> list[str]:
     parts = _SPLIT_RE.split(value)
     return [_clean(p) for p in parts if _clean(p)]
+
+def _list_cell(cell) -> list[str]:
+    """Read a cell that holds several values, however the page separates them.
+
+    Wikipedia writes multi-value cells three ways -- "a, b", "a<br>b", and a
+    <ul> of <li> -- and get_text() with no separator concatenates the last two
+    into one string. That is how the corpus ended up with a sector called
+    "Financial technologyPaymentsAdware" and a founder called
+    "Jyoti BansalBipul Sinha".
+
+    Inserting a comma at every markup boundary turns all three spellings into
+    the comma-separated case, which _split_multi already handles. Only cells
+    that are genuinely lists get this treatment: doing it to a scalar cell
+    would corrupt values that legitimately contain commas, such as a
+    headquarters address.
+
+    Citations are removed as markup, before the separators go in. A reference
+    renders as <sup>[1]</sup>, and separating every node first turns it into
+    "[, 1, ]" -- which the citation pattern no longer recognizes, so "1" and
+    "[" survive as sectors of their own.
+    """
+    cell = copy.copy(cell)
+    for sup in cell.find_all("sup"):
+        sup.decompose()
+    return [value for value in _split_multi(cell.get_text(separator=", ")) if _has_letter(value)]
+
+def _has_letter(value: str) -> bool:
+    """Reject fragments left by markup, e.g. a stray bracket or footnote number.
+    A sector name contains a letter; punctuation and digits alone never do."""
+    return any(char.isalpha() for char in value)
 
 def _parse_valuation(value: str) -> float | None:
     value = _clean(value)
@@ -63,6 +95,51 @@ def _link_matches_name(name: str, slug: str, title: str) -> bool:
             if len(token) >= 3 and token in target:
                 return True
     return False
+
+def resolve_slug(name: str, query_json: dict) -> str | None:
+    """Find the article for a company whose list row carried no usable link.
+
+    Roughly a third of the rows link nowhere useful -- no link at all, or one
+    _link_matches_name rejected as pointing at a different company -- and
+    without an article those records fall back to a stub.
+
+    This reads a title query (action=query&titles=...&redirects=1), not a
+    full-text search. Full-text search was tried first and is unusable here: it
+    ranks by relevance rather than identity, so "Razorpay India company"
+    returns Cred, the Central Bank of India, and an article about fintech in
+    India, with no mention of Razorpay at all. Picking from that list means
+    filing one company's history under another company's name.
+
+    A title query answers the only question worth asking -- does an article
+    with this name exist -- and resolves redirects, which is what catches the
+    companies that have been renamed since the list was written. A redirect is
+    trusted even when the target name looks nothing like the original, because
+    an editor asserted the two names are the same subject: that is how "Zomato"
+    correctly reaches "Eternal Limited". Anything else returns None and the
+    record keeps its stub.
+    """
+    if not name.strip():
+        return None
+
+    query = query_json.get("query") or {}
+
+    # A redirect is an editorial statement that two names denote one subject.
+    redirects = {r.get("from"): r.get("to") for r in query.get("redirects") or []}
+    if name in redirects:
+        return str(redirects[name]).replace(" ", "_")
+
+    target = re.sub(r"[^a-z0-9]", "", name.lower())
+    for page in (query.get("pages") or {}).values():
+        if "missing" in page:
+            continue
+        title = page.get("title") or ""
+        # Article titles disambiguate with a parenthetical -- "Zepto (company)"
+        # -- which should not count against the match.
+        bare = re.sub(r"\s*\([^)]*\)\s*$", "", title)
+        candidate = re.sub(r"[^a-z0-9]", "", bare.lower())
+        if candidate and (target in candidate or candidate in target):
+            return title.replace(" ", "_")
+    return None
 
 def parse_unicorn_table(html: str) -> list[UnicornRecord]:
     """Extract Indian unicorn rows from the Wikipedia page.
@@ -98,8 +175,8 @@ def parse_unicorn_table(html: str) -> list[UnicornRecord]:
                 slug = None
 
             valuation = _parse_valuation(cells[1].get_text())
-            sectors = _split_multi(cells[3].get_text())
-            founders = _split_multi(cells[5].get_text()) or ["Unknown"]
+            sectors = _list_cell(cells[3])
+            founders = _list_cell(cells[5]) or ["Unknown"]
 
             records.append(UnicornRecord(name=name, slug=slug, valuation=valuation, sectors=sectors, founders=founders))
 
@@ -122,14 +199,16 @@ def parse_infobox(html: str) -> dict:
         value = _clean(data.get_text())
 
         if key == "industry":
-            info["industry"] = _split_multi(value)
+            info["industry"] = _list_cell(data)
         elif key == "founded":
             match = re.search(r"\b(\d{4})\b", value)
             if match:
                 info["founded_year"] = int(match.group(1))
-        elif key == "founder":
-            info["founders"] = _split_multi(value)
+        elif key in ("founder", "founders"):
+            info["founders"] = _list_cell(data)
         elif key == "headquarters":
+            # Scalar, and commonly "City, State, Country" -- read without the
+            # inserted separators so the address survives intact.
             info["headquarters"] = value
 
     return info
@@ -146,18 +225,61 @@ def _extract_lead(html: str) -> str:
             return text
     return ""
 
+def _stub_description(record: UnicornRecord, info: dict) -> str:
+    """Describe a company with only what its list row and infobox knew.
+
+    The previous stub ended every record with the same sentence -- "It is
+    featured on Wikipedia's list of unicorn startup companies." Repeated across
+    32 of 111 records, that sentence became a substantial fraction of the
+    embedded text and was identical in all of them, so it pulled those chunks
+    together in vector space while telling a reader nothing. Retrieval for
+    "fintech unicorn payments" returned three of them, indistinguishable.
+
+    What the row does know -- valuation, founders, sector, year, headquarters --
+    is specific per company, and answers questions the corpus is actually asked.
+    """
+    # Canonical spellings, so the prose matches the sector shown beside it.
+    sectors = normalize_sectors(record.sectors or [])
+    sentences = []
+
+    opening = f"{record.name} is an Indian startup"
+    if sectors:
+        opening += f" in {_join(sectors)}"
+    founded = info.get("founded_year")
+    if founded:
+        opening += f", founded in {founded}"
+    sentences.append(opening + ".")
+
+    if record.valuation:
+        valuation = f"{record.valuation:g}"
+        sentences.append(
+            f"It is valued at about US${valuation} billion, which places it among "
+            "India's unicorns."
+        )
+
+    founders = [f for f in (record.founders or info.get("founders") or []) if f != "Unknown"]
+    if founders:
+        sentences.append(f"{record.name} was founded by {_join(founders)}.")
+
+    headquarters = info.get("headquarters")
+    if headquarters:
+        sentences.append(f"It is headquartered in {headquarters}.")
+
+    return " ".join(sentences)
+
+def _join(items: list[str]) -> str:
+    """Comma-separate a list, with "and" before the last item."""
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} and {items[-1]}"
+
 def build_startup(record: UnicornRecord, article_html: str | None = None) -> Startup:
     now = datetime.now()
     info = parse_infobox(article_html) if article_html else {}
 
     description = _extract_lead(article_html) if article_html else ""
     if not description:
-        sectors = record.sectors or ["its sector"]
-        description = (
-            f"{record.name} is an Indian unicorn startup "
-            f"operating in {', '.join(sectors)}. "
-            "It is featured on Wikipedia's list of unicorn startup companies."
-        )
+        description = _stub_description(record, info)
 
     source_url = f"https://en.wikipedia.org/wiki/{record.slug}" if record.slug else _LIST_URL
 
@@ -179,6 +301,28 @@ def _fetch(url: str) -> str:
         r = client.get(url)
         r.raise_for_status()
         return r.text
+
+def _lookup_slug(name: str) -> str | None:
+    """Ask Wikipedia whether an article exists under this name. Best effort.
+
+    Both spellings are queried in one request: the plain name, and the
+    "(company)" form Wikipedia uses when a name is ambiguous.
+    """
+    params = {
+        "action": "query",
+        "prop": "info",
+        "titles": f"{name}|{name} (company)",
+        "redirects": "1",
+        "format": "json",
+    }
+    try:
+        with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=30) as client:
+            r = client.get("https://en.wikipedia.org/w/api.php", params=params)
+            r.raise_for_status()
+            return resolve_slug(name, r.json())
+    except Exception as exc:
+        print(f"article lookup failed for {name}: {exc}")
+        return None
 
 def _extract_text(html: str) -> str:
     soup = BeautifulSoup(html, "lxml")
@@ -222,17 +366,36 @@ def scrape_startups(limit: int | None = None, fetch_articles: bool = True) -> li
         unique = unique[:limit]
 
     startups: list[Startup] = []
+    stubbed: list[str] = []
     for record in unique:
+        # A row that links nowhere useful used to go straight to a stub. Look
+        # the title up first; resolve_slug rejects anything that does not name
+        # this company, so it cannot enrich a record from a different one.
+        slug = record.slug
+        if fetch_articles and not slug:
+            slug = _lookup_slug(record.name)
+            if slug:
+                record = replace(record, slug=slug)
+
         article_html = None
-        if fetch_articles and record.slug:
+        if fetch_articles and slug:
             try:
-                article_html = _fetch(f"https://en.wikipedia.org/wiki/{record.slug}")
+                article_html = _fetch(f"https://en.wikipedia.org/wiki/{slug}")
             except Exception as exc:
                 print(f"article fetch failed for {record.name}: {exc}")
         try:
-            startups.append(build_startup(record, article_html))
+            startup = build_startup(record, article_html)
+            startups.append(startup)
+            if not article_html:
+                stubbed.append(record.name)
         except Exception as exc:
             print(f"skip {record.name}: {exc}")
+
+    if stubbed:
+        # Worth printing rather than swallowing: every name here is a company
+        # whose only text is a generated stub, which is the ceiling on what
+        # retrieval can do for it.
+        print(f"no article found for {len(stubbed)}/{len(unique)}: {', '.join(stubbed)}")
 
     return startups
 

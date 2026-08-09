@@ -8,6 +8,7 @@ from src.scraper import (
     build_startup,
     parse_infobox,
     parse_unicorn_table,
+    resolve_slug,
 )
 
 LIST_HTML = """
@@ -144,8 +145,8 @@ def test_build_startup_without_article_synthesizes_description():
 
     assert s.name == "Razorpay"
     assert s.normalized_name == "razorpay"
-    assert s.fundings == 7.5e9  
-    assert s.sectors == ["Fintech", "Payments"]
+    assert s.fundings == 7.5e9
+    assert s.sectors == ["Financial Technology", "Payments"]
     assert s.founders == ["Harshil Mathur", "Shashank Kumar"]
     assert s.founded_year is None  
     assert "unicorn" in s.description.lower()
@@ -171,5 +172,164 @@ def test_build_startup_with_article_enriches_from_infobox_and_lead():
 def test_build_startup_defaults_founders_when_missing():
     record = UnicornRecord(name="Mystery", slug=None, valuation=None)
     s = build_startup(record)
-    assert s.founders == ["Unknown"]  
+    assert s.founders == ["Unknown"]
     assert len(s.description) >= 5
+
+# --- list values split across markup, not commas -----------------------------
+#
+# The fixtures above separate industries with commas, which is why the bug they
+# were meant to cover went unnoticed for the whole corpus: real infoboxes use
+# <br> or a <ul>, and get_text() with no separator argument joins the pieces
+# with nothing at all. That produced sector chips like
+# "Financial technologyPaymentsAdware" on the live site.
+
+INFOBOX_LIST_MARKUP = """
+<table class="infobox">
+  <tbody>
+    <tr><th>Industry</th><td><ul><li>Financial technology</li><li>Payments</li>
+        <li>Adware</li></ul></td></tr>
+    <tr><th>Founder</th><td>Vijay Shekhar Sharma</td></tr>
+  </tbody>
+</table>
+"""
+
+INFOBOX_BR_MARKUP = """
+<table class="infobox">
+  <tbody>
+    <tr><th>Industry</th><td>Cloud computing<br/>Backup</td></tr>
+    <tr><th>Founder</th><td>Jyoti Bansal<br/>Bipul Sinha</td></tr>
+  </tbody>
+</table>
+"""
+
+INFOBOX_CITED_LIST_MARKUP = """
+<table class="infobox">
+  <tbody>
+    <tr><th>Industry</th><td><ul>
+      <li>Financial technology<sup class="reference"><a href="#cite_note-1">[1]</a></sup></li>
+      <li>Payments</li></ul></td></tr>
+    <tr><th>Founder</th><td>Vijay Shekhar Sharma<sup>[2]</sup></td></tr>
+  </tbody>
+</table>
+"""
+
+def test_parse_infobox_drops_citation_markers_from_a_list():
+    """A reference renders as <sup>[1]</sup>. Inserting separators at every node
+    boundary first would turn it into "[, 1, ]", which the citation pattern no
+    longer matches -- leaving "1" and "[" as sectors in their own right. So the
+    citation has to be removed as markup, before the separators go in."""
+    info = parse_infobox(INFOBOX_CITED_LIST_MARKUP)
+    assert info["industry"] == ["Financial technology", "Payments"]
+    assert info["founders"] == ["Vijay Shekhar Sharma"]
+
+def test_parse_infobox_splits_a_list_of_industries():
+    assert parse_infobox(INFOBOX_LIST_MARKUP)["industry"] == [
+        "Financial technology",
+        "Payments",
+        "Adware",
+    ]
+
+def test_parse_infobox_splits_industries_separated_by_line_breaks():
+    assert parse_infobox(INFOBOX_BR_MARKUP)["industry"] == ["Cloud computing", "Backup"]
+
+def test_parse_infobox_splits_founders_separated_by_line_breaks():
+    """Same defect, and worse when it lands in founders: two people become one
+    person with an impossible name."""
+    assert parse_infobox(INFOBOX_BR_MARKUP)["founders"] == ["Jyoti Bansal", "Bipul Sinha"]
+
+TABLE_LIST_MARKUP = """
+<table class="wikitable">
+  <tbody>
+    <tr><th>Company</th><th>Valuation</th><th>Date</th><th>Industry</th>
+        <th>Country</th><th>Founder(s)</th></tr>
+    <tr>
+      <td>Zepto</td>
+      <td>5</td>
+      <td>2024</td>
+      <td><ul><li>Retail</li><li>E-commerce</li></ul></td>
+      <td>India</td>
+      <td><ul><li>Aadit Palicha</li><li>Kaivalya Vohra</li></ul></td>
+    </tr>
+  </tbody>
+</table>
+"""
+
+def test_parse_unicorn_table_splits_list_cells():
+    record = parse_unicorn_table(TABLE_LIST_MARKUP)[0]
+    assert record.sectors == ["Retail", "E-commerce"]
+    assert record.founders == ["Aadit Palicha", "Kaivalya Vohra"]
+
+def test_parse_unicorn_table_keeps_a_name_containing_a_comma_intact():
+    """Splitting cells must not reach the name column: separators are inserted
+    at markup boundaries, and a name is one text node however it is punctuated."""
+    html = TABLE_LIST_MARKUP.replace("<td>Zepto</td>", "<td>Zepto, Inc.</td>")
+    assert parse_unicorn_table(html)[0].name == "Zepto, Inc."
+
+# --- recovering an article the list page did not link ------------------------
+#
+# A row with no usable link meant no article fetch, so build_startup fell back
+# to a generated stub. That happened for 32 of 111 companies, and those stubs
+# are what /search returned: near-identical sentences with a name swapped in.
+# Searching by name recovers most of them.
+
+def _titles(*pages: tuple[str, bool], redirects: dict[str, str] | None = None) -> dict:
+    """Shape of action=query&prop=info&titles=...&redirects=1."""
+    query: dict = {
+        "pages": {
+            str(index): ({"title": title} if exists else {"title": title, "missing": ""})
+            for index, (title, exists) in enumerate(pages)
+        }
+    }
+    if redirects:
+        query["redirects"] = [{"from": k, "to": v} for k, v in redirects.items()]
+    return {"query": query}
+
+def test_resolve_slug_accepts_an_article_that_exists_under_the_company_name():
+    assert resolve_slug("Zepto", _titles(("Zepto (company)", True))) == "Zepto_(company)"
+
+def test_resolve_slug_returns_none_when_wikipedia_has_no_such_article():
+    """The common case, and not a bug: Wikipedia has no article for roughly a
+    third of the companies on its own unicorn list. Those keep their stub."""
+    assert resolve_slug("Razorpay", _titles(("Razorpay", False))) is None
+    assert resolve_slug("Razorpay", {}) is None
+
+def test_resolve_slug_follows_a_redirect_even_to_an_unrecognizable_name():
+    """A redirect is an editor asserting that two names are one subject, which
+    is the only reliable signal for a company that has been renamed. Zomato
+    became Eternal Limited; no string comparison would connect those."""
+    resolved = resolve_slug(
+        "Zomato", _titles(("Eternal Limited", True), redirects={"Zomato": "Eternal Limited"})
+    )
+    assert resolved == "Eternal_Limited"
+
+def test_resolve_slug_rejects_an_article_about_something_else():
+    """Wikipedia has an article at "MPL" -- a disambiguation page covering
+    Muslim personal law among others -- and none for Mobile Premier League.
+    Sharing a title is not being the same subject."""
+    assert resolve_slug("Meesho", _titles(("Meerut", True))) is None
+
+# --- the stub, when there is genuinely no article ----------------------------
+
+def test_stub_description_states_facts_rather_than_repeating_itself():
+    """The old stub's second sentence -- "It is featured on Wikipedia's list of
+    unicorn startup companies" -- was identical across every stubbed record, so
+    it added a strong shared signal to 32 chunks and helped distinguish none of
+    them. Whatever the row does know goes in instead."""
+    record = UnicornRecord(
+        name="Zepto",
+        slug=None,
+        valuation=5.0,
+        sectors=["Retail", "E-commerce"],
+        founders=["Aadit Palicha", "Kaivalya Vohra"],
+    )
+    description = build_startup(record).description
+
+    assert "Aadit Palicha" in description
+    assert "5" in description
+    assert "featured on Wikipedia's list" not in description
+
+def test_stub_description_holds_up_when_the_row_knows_almost_nothing():
+    record = UnicornRecord(name="Mystery", slug=None, valuation=None)
+    description = build_startup(record).description
+    assert "Mystery" in description
+    assert len(description) >= 5

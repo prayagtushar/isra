@@ -29,7 +29,8 @@ def test_build_startup_maps_fields():
     assert s.name == "Razorpay"
     assert s.normalized_name == "razorpay"
     assert "financial services" in s.description
-    assert s.sectors == ["Fintech", "Payments"]
+    # YC's "Fintech" is stored under the canonical spelling. See src/sectors.py.
+    assert s.sectors == ["Financial Technology", "Payments"]
     assert str(s.source_url) == "https://www.ycombinator.com/companies/razorpay"
     assert s.founded_year == 2015
     assert s.headquarters == "Bengaluru, KA, India"
@@ -62,5 +63,10 @@ def test_cross_source_merge_dedupes_by_name():
     m = merged[0]
     # longer description (YC) wins; sectors unioned; wiki funding preserved
     assert "financial services" in m.description
-    assert {"Fintech", "Payments", "Financial technology"}.issubset(set(m.sectors))
     assert m.fundings == 7_500_000_000.0
+
+    # The two sources named one sector two ways -- Wikipedia "Financial
+    # technology", YC "Fintech". merge_startups unions sectors by string
+    # equality, so before normalization this record carried both and the
+    # /startups filter listed them as separate choices. One sector, one entry.
+    assert sorted(m.sectors) == ["Financial Technology", "Payments"]

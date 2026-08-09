@@ -3,6 +3,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
+from src.sectors import normalize_sectors
+
 class Startup(BaseModel):
     
 
@@ -40,3 +42,16 @@ class Startup(BaseModel):
     @classmethod
     def normalize(cls, name: str) -> str:
         return "".join(char.lower() for char in name if char.isalnum())
+
+    @field_validator("sectors")
+    @classmethod
+    def canonicalize_sectors(cls, sectors: List[str]) -> List[str]:
+        """Reconcile sector vocabulary here rather than in each scraper.
+
+        Wikipedia and Y Combinator name the same sectors differently, and
+        merge_startups unions them by string equality -- so unless they agree
+        before the union, the same sector survives twice under two spellings.
+        Every record passes through this model, which makes it the one place
+        that cannot be bypassed by adding a third source.
+        """
+        return normalize_sectors(sectors)
