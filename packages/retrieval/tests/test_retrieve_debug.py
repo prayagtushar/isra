@@ -1,9 +1,29 @@
+from contextlib import contextmanager
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from isra_retrieval.models import Chunk
 from isra_retrieval.pipeline import retrieve_debug
+
+
+@pytest.fixture(autouse=True)
+def no_database():
+    """Stub out the connection ``retrieve_debug`` opens.
+
+    Every search function these tests touch is patched, but the pipeline still
+    opens a real connection to hand them. Without this the tests quietly run
+    against whatever ``DATABASE_URL`` is in the environment — which, thanks to
+    ``load_dotenv()``, is the deployed database.
+    """
+
+    @contextmanager
+    def _fake_conn():
+        yield object()
+
+    with patch("isra_retrieval.pipeline.get_conn", _fake_conn):
+        yield
 
 
 def _chunk(chunk_id: int, score: float = 0.5) -> Chunk:

@@ -1,4 +1,3 @@
-import os
 from typing import Generator
 
 import numpy as np
@@ -7,15 +6,15 @@ import pytest
 from psycopg import Connection
 
 from isra_retrieval.db import get_conn
+from tests.dsn import resolve_test_dsn
 from isra_retrieval.keyword_search import search_keyword
 from isra_retrieval.models import Chunk
 from isra_retrieval.pipeline import retrieve
 from isra_retrieval.vector_search import vector_search
 
 def _dsn() -> str:
-    return os.environ.get(
-        "DATABASE_URL", "postgresql://isra:isra@localhost:5432/isra"
-    )
+    # Never the deployed DSN: these tests write and delete rows. See tests/dsn.py.
+    return resolve_test_dsn()
 
 def _can_connect() -> bool:
     try:
