@@ -143,6 +143,12 @@ def resolve_slug(name: str, query_json: dict) -> str | None:
     for page in (query.get("pages") or {}).values():
         if "missing" in page:
             continue
+        # A disambiguation page carries the company's exact name and no content
+        # about it. "Apna" reached the corpus as "Apna or APNA can mean:" with no
+        # sector, because the title matched. Wikipedia flags these itself, which
+        # beats guessing from the text.
+        if "disambiguation" in (page.get("pageprops") or {}):
+            continue
         title = page.get("title") or ""
         # Article titles disambiguate with a parenthetical -- "Zepto (company)"
         # -- which should not count against the match.
@@ -333,7 +339,9 @@ def _lookup_slug(name: str) -> str | None:
     """
     params = {
         "action": "query",
-        "prop": "info",
+        # pageprops carries the disambiguation flag, which is how a page holding
+        # the company's name but none of its content is recognized.
+        "prop": "info|pageprops",
         "titles": f"{name}|{name} (company)",
         "redirects": "1",
         "format": "json",

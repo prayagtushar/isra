@@ -289,11 +289,26 @@ def test_parse_unicorn_table_keeps_a_name_containing_a_comma_intact():
 # are what /search returned: near-identical sentences with a name swapped in.
 # Searching by name recovers most of them.
 
-def _titles(*pages: tuple[str, bool], redirects: dict[str, str] | None = None) -> dict:
-    """Shape of action=query&prop=info&titles=...&redirects=1."""
+def _titles(
+    *pages: tuple[str, bool],
+    redirects: dict[str, str] | None = None,
+    disambiguations: tuple[str, ...] = (),
+) -> dict:
+    """Shape of action=query&prop=info|pageprops&titles=...&redirects=1."""
     query: dict = {
         "pages": {
-            str(index): ({"title": title} if exists else {"title": title, "missing": ""})
+            str(index): (
+                {
+                    "title": title,
+                    **(
+                        {"pageprops": {"disambiguation": ""}}
+                        if title in disambiguations
+                        else {}
+                    ),
+                }
+                if exists
+                else {"title": title, "missing": ""}
+            )
             for index, (title, exists) in enumerate(pages)
         }
     }
@@ -370,6 +385,20 @@ def test_seed_details_scrapes_by_name_and_skips_what_has_no_article():
     assert "hospitality chain" in result[0].description.lower()
     assert result[0].founded_year == 2012
     assert str(result[0].source_url).endswith("Oyo")
+
+def test_resolve_slug_skips_a_disambiguation_page():
+    """A disambiguation page carries the company's exact name and nothing about
+    it. "Apna" reached the live corpus described as "Apna or APNA can mean:",
+    with no sector, because the title matched."""
+    resolved = resolve_slug("Apna", _titles(("Apna", True), disambiguations=("Apna",)))
+    assert resolved is None
+
+def test_resolve_slug_takes_the_company_page_beside_a_disambiguation_page():
+    resolved = resolve_slug(
+        "Apna",
+        _titles(("Apna", True), ("Apna (company)", True), disambiguations=("Apna",)),
+    )
+    assert resolved == "Apna_(company)"
 
 def test_resolve_slug_prefers_a_matching_title_over_a_redirect():
     """Real case, and the reason title matches are checked first: "Zepto"
