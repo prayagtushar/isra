@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/prayagtushar/isra/actions/workflows/ci.yml/badge.svg)](https://github.com/prayagtushar/isra/actions/workflows/ci.yml)
 
-**[Try the live demo →](https://isra.prayagtushar.xyz)** — there is no landing page and no account. The site opens straight into the chat; ask a question, or compare retrieval modes side by side in [`/lab`](https://isra.prayagtushar.xyz/lab) and browse [`/search`](https://isra.prayagtushar.xyz/search) and [`/startups`](https://isra.prayagtushar.xyz/startups). Only re-ingesting the corpus is gated, by a shared key.
+**[Try the live demo →](https://isra.prayagtushar.xyz)** — there is no landing page and no account. The site opens straight into the chat; ask a question, or watch the pipeline resolve stage by stage in [`/lab`](https://isra.prayagtushar.xyz/lab) and browse [`/search`](https://isra.prayagtushar.xyz/search) and [`/startups`](https://isra.prayagtushar.xyz/startups). Only re-ingesting the corpus is gated, by a shared key.
 
 A hand-rolled Retrieval-Augmented Generation (RAG) system over Indian startup data, built without LangChain so that ranking, fusion and citation behaviour stay under direct control. The full pipeline — vector search + Postgres full-text search → RRF fusion → BGE reranker → streaming generation — is implemented from primitives and measured by an evaluation harness that is also hand-rolled.
 
@@ -93,7 +93,7 @@ Key design decisions:
 4. **UI** (`apps/web`)
    - Next.js App Router proxies `/api/*` requests to FastAPI to keep API keys server-side.
    - `/chat` shows progressive sources, inline citations, and 👍/👎 feedback.
-   - `/lab` compares retrieval modes side-by-side.
+   - `/lab` streams the four pipeline stages as each completes.
    - `/search` and `/startups` provide search-explorer and startup-browser views.
    - Every retrieval surface is public, and so is `/chat` — the demo is meant to
      be used without signing up. LLM spend is bounded by a global daily ceiling
@@ -122,7 +122,10 @@ Key design decisions:
 - **Hybrid retrieval** with vector + full-text search.
 - **RRF fusion** and optional **BGE reranker**.
 - **Streaming chat** with memory, sources, and inline citations.
-- **Retrieval lab** for comparing `vector`, `hybrid`, and `hybrid+rerank` on the same query.
+- **Retrieval lab** that streams each pipeline stage — vector search, keyword
+  search, RRF fusion, cross-encoder rerank — as it finishes, with the measured
+  cost of each and every chunk's movement between them. One run, not three: the
+  columns are also what `vector`, `hybrid` and `hybrid+rerank` each return.
 - **Search explorer** for inspecting ranked chunks.
 - **Startup browser** with sector filters and detail drawers.
 - **Feedback capture** (thumbs up/down) stored in Postgres.
@@ -181,6 +184,7 @@ bun run eval -- --no-generation   # retrieval metrics only
 |---|---|---|
 | `GET` | `/health` | Health check with database connectivity verification |
 | `POST` | `/search` | Ranked retrieval results |
+| `POST` | `/search/trace` | One SSE event per pipeline stage, sent as each completes |
 | `POST` | `/chat` | Streaming chat over SSE |
 | `POST` | `/feedback` | Store thumbs up/down feedback |
 | `GET` | `/startups` | Paginated startup browser data |
@@ -197,9 +201,11 @@ except server-side limits. There are four layers, in order of what they stop:
    sources but stops calling the model and says so. Set it to `0` to halt
    answering immediately without a redeploy; `-1` removes the cap.
 2. **Per-IP rate limits** (below) — stop a single visitor hammering the demo.
-3. **Bounded requests** — `question` ≤ 600 characters, ≤ 10 history turns,
-   `top_k` ≤ 10, and `max_tokens=1024` on the completion, so no single call can
-   run up an unbounded prompt.
+3. **Bounded requests** — `question` and `query` ≤ 600 characters, ≤ 10 history
+   turns, `top_k` ≤ 10, and `max_tokens=1024` on the completion, so no single
+   call can run up an unbounded prompt or an unbounded rerank. The search
+   endpoints enforce this too, which they did not originally: `/search` took an
+   unbounded `top_k` and an empty query while this section claimed otherwise.
 4. **The GCP billing budget** — the backstop, since the daily counter is held in
    process and a restart resets it.
 
@@ -219,7 +225,7 @@ Every endpoint except `/health` is limited per client IP. Over-limit requests ge
 |---|---|
 | `/chat` | 15 / hour (spends LLM tokens) |
 | `/ingest` | 3 / hour (writes, runs the scraper) |
-| `/search` | 30 / min (runs the cross-encoder) |
+| `/search` | 30 / min (runs the cross-encoder; `/search/trace` shares this budget) |
 | `/feedback` | 20 / min |
 | `/startups` | 60 / min |
 
