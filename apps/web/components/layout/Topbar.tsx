@@ -17,6 +17,8 @@ export function Topbar({
   const pathname = usePathname();
   const active = activeNav(pathname);
   const { mode } = useSettings();
+  const showsMode =
+    pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/search");
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line px-3 sm:px-4">
@@ -41,12 +43,17 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="hidden items-center gap-1.5 sm:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-ink/40" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-faint">
-            {mode}
+        {/* The mode applies to /chat and /search. The lab runs the whole pipeline
+            and labels each stage itself, and /startups never retrieves, so on
+            those pages this chip names a setting with no effect here. */}
+        {showsMode && (
+          <span className="hidden items-center gap-1.5 sm:flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+              {mode}
+            </span>
           </span>
-        </span>
+        )}
         <span className="hidden items-center gap-1 md:flex">
           <Kbd>⌘</Kbd>
           <Kbd>K</Kbd>

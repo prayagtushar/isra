@@ -31,9 +31,12 @@ export const CHANNEL_HINTS: Record<Channel, string> = {
  * no background at all.
  */
 export function channelStyle(channel: Channel): CSSProperties {
-  // Fusion and rerank are both "the resolved ranking", drawn in ink.
-  const token = channel === "fusion" ? "rerank" : channel;
-  return { backgroundColor: `var(--${token})` };
+  return { backgroundColor: `var(--${channel})` };
+}
+
+/** The same hue for text or an icon rather than a filled bar. */
+export function channelTextStyle(channel: Channel): CSSProperties {
+  return { color: `var(--${channel})` };
 }
 
 export function stageChannel(stage: TraceStage["name"]): Channel {

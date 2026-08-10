@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Columns3, TriangleAlert } from "lucide-react";
-import { search } from "@/lib/api";
+
+import { useRetrievalStages } from "@/lib/hooks/useRetrievalStages";
 import { useSettings } from "@/lib/store/settings";
 import { Button } from "@/components/ui/Button";
 import { TopKControl } from "@/components/ui/TopKControl";
@@ -10,91 +11,77 @@ import { Spinner } from "@/components/ui/Spinner";
 import { StateView } from "@/components/ui/StateView";
 import { ExampleQueries, LAB_EXAMPLES } from "@/components/ui/ExampleQueries";
 import { ScoreBar } from "@/components/ui/ScoreBar";
-import { channelStyle, type Channel } from "@/lib/channels";
+import { CHANNEL_HINTS, CHANNEL_LABELS, channelStyle, type Channel } from "@/lib/channels";
 import { formatScore, truncate } from "@/lib/format";
-import { RETRIEVAL_MODES, type RetrievalMode, type Source } from "@/lib/types";
+import type { LiveStage, Source } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
-const MODE_LABEL: Record<RetrievalMode, string> = {
-  vector: "Vector",
-  hybrid: "Hybrid",
-  "hybrid+rerank": "Hybrid + Rerank",
-};
+/**
+ * The pipeline, one column per stage, in the order the server finishes them.
+ *
+ * This used to run three separate queries -- vector, hybrid, hybrid+rerank --
+ * and compare their outputs. That cost three embeddings, three round trips and
+ * three reranks to show less: the keyword list was never displayed at all, and
+ * the keyword list is the whole explanation for the project's least comfortable
+ * result, that RRF fusion loses direct lookups because keyword hits displace the
+ * chunk vector search already had first.
+ *
+ * One run now reports all four stages as they complete. The columns are still
+ * the three modes -- vector is what `vector` returns, fusion is what `hybrid`
+ * returns, rerank is what `hybrid+rerank` returns -- with the step that was
+ * previously invisible in between.
+ */
 
-const BASELINE: Record<RetrievalMode, RetrievalMode | null> = {
-  vector: null,
-  hybrid: "vector",
-  "hybrid+rerank": "hybrid",
-};
+// The order the pipeline runs in, which is also the order these arrive.
+const STAGE_ORDER: Channel[] = ["vector", "keyword", "fusion", "rerank"];
 
 /**
- * Column colours, which deliberately differ from modeChannel.
+ * What each stage's movement is measured against.
  *
- * Elsewhere a hybrid result is drawn in ink, because on its own it is simply the
- * ranking that came out. Here the three columns are read left to right as one
- * pipeline, and what the middle column adds over the first is the keyword
- * channel -- so amber names its contribution. Reusing modeChannel would paint
- * hybrid and rerank the same ink and make two of the three columns
- * indistinguishable, which is the one comparison this page exists to support.
+ * Fusion is compared to vector rather than to keyword, because that is the
+ * comparison the eval set flagged: fusion's job is to improve on vector, and on
+ * direct lookups it does the opposite. Keyword is also shown against vector, so
+ * a result marked new in that column is exactly a chunk vector search missed --
+ * the ones with the power to displace something.
  */
-const COLUMN_CHANNEL: Record<RetrievalMode, Channel> = {
-  vector: "vector",
-  hybrid: "keyword",
-  "hybrid+rerank": "rerank",
+const MEASURED_AGAINST: Partial<Record<Channel, Channel>> = {
+  keyword: "vector",
+  fusion: "vector",
+  rerank: "fusion",
 };
 
-type Results = Record<RetrievalMode, Source[]>;
-
 const rankMap = (list: Source[]) => {
-  const m = new Map<number, number>();
-  list.forEach((s, i) => m.set(s.id, i + 1));
-  return m;
+  const ranks = new Map<number, number>();
+  list.forEach((s, i) => ranks.set(s.id, i + 1));
+  return ranks;
 };
 
 export function LabView() {
   const { topK, setTopK } = useSettings();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Results | null>(null);
-  const [ranQuery, setRanQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { stages, running, error, ranQuery, run } = useRetrievalStages();
 
-  // Accepts an override so an example can be run in one click. Without it the
-  // click would only fill the box and the visitor would still have to press Run.
-  const run = async (override?: string) => {
-    const q = (override ?? query).trim();
-    if (!q || loading) return;
+  // Always the full pipeline: the shorter modes are the earlier columns, so
+  // there is nothing a mode selector could reveal that is not already on screen.
+  const start = (override?: string) => {
+    const q = override ?? query;
     if (override) setQuery(override);
-    setLoading(true);
-    setError(null);
-    try {
-      const [v, h, r] = await Promise.all(
-        RETRIEVAL_MODES.map((m) => search({ query: q, top_k: topK, mode: m })),
-      );
-      setResults({
-        vector: v.results,
-        hybrid: h.results,
-        "hybrid+rerank": r.results,
-      });
-      setRanQuery(q);
-    } catch (e) {
-      setError((e as Error).message || "Lab run failed.");
-      setResults(null);
-    } finally {
-      setLoading(false);
-    }
+    void run(q, topK, "hybrid+rerank");
   };
+
+  const byName = new Map(stages.map((s) => [s.name, s]));
+  const started = running || stages.length > 0 || Boolean(error);
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-line">
-        <div className="mx-auto w-full max-w-6xl space-y-3 px-4 py-4">
+        <div className="mx-auto w-full max-w-7xl space-y-3 px-4 py-4">
           <div className="flex flex-wrap gap-2">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && run()}
-              placeholder="Run one query across all three retrieval modes…"
+              onKeyDown={(e) => e.key === "Enter" && start()}
+              placeholder="Run one query through the whole pipeline…"
               className="h-10 min-w-0 flex-1 rounded-[3px] border border-line bg-panel px-3 text-sm text-ink placeholder:text-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
             />
             <div className="flex items-center gap-2">
@@ -103,62 +90,65 @@ export function LabView() {
             </div>
             <Button
               variant="primary"
-              onClick={() => run()}
-              disabled={!query.trim() || loading}
+              onClick={() => start()}
+              disabled={!query.trim() || running}
               className="min-w-[4.5rem]"
             >
-              {loading ? <Spinner /> : "Run"}
+              {running ? <Spinner /> : "Run"}
             </Button>
           </div>
           <p className="text-[12px] leading-relaxed text-muted">
-            Compare how{" "}
-            <span className="font-mono text-faint">vector</span> →{" "}
-            <span className="font-mono text-faint">hybrid</span> →{" "}
-            <span className="font-mono text-faint">rerank</span>{" "}
-            reorder the same query. Arrows show each chunk&rsquo;s movement
-            against the previous mode.
+            One query, four stages, each shown the moment it finishes. Two searches
+            run, fuse, and get re-scored — the arrows track every chunk&rsquo;s
+            movement, and the timings are measured, not staged.
           </p>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-6xl px-4 py-6">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-20 text-faint">
-              <Spinner />
-              <span className="font-mono text-[11px] uppercase tracking-[0.14em]">
-                Running 3 modes
-              </span>
-            </div>
-          ) : error ? (
+        <div className="mx-auto w-full max-w-7xl px-4 py-6">
+          {error && stages.length === 0 ? (
             <StateView
               icon={TriangleAlert}
-              title="Lab run failed"
+              title="Retrieval failed"
               hint={error}
-              action={{ label: "Try again", onClick: () => run() }}
+              action={{ label: "Try again", onClick: () => start() }}
             />
-          ) : !results ? (
+          ) : !started ? (
             <StateView
               icon={Columns3}
-              title="Compare retrieval modes side by side"
-              hint="Run a query to see vector, hybrid, and rerank results next to each other — and exactly how rerank reorders them."
+              title="Watch the pipeline resolve"
+              hint="Vector and keyword search run side by side, fuse into one ranking, then a cross-encoder re-scores it. Each stage appears as it lands."
             >
-              <ExampleQueries examples={LAB_EXAMPLES} onPick={(q) => run(q)} />
+              <ExampleQueries examples={LAB_EXAMPLES} onPick={(q) => start(q)} />
             </StateView>
           ) : (
             <>
-              <p className="label mb-3">Query · “{ranQuery}”</p>
-              <div className="grid gap-3 md:grid-cols-3">
-                {RETRIEVAL_MODES.map((m) => (
-                  <ModeColumn
-                    key={m}
-                    mode={m}
-                    list={results[m]}
-                    baseline={
-                      BASELINE[m] ? rankMap(results[BASELINE[m]!]) : null
-                    }
-                  />
-                ))}
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <p className="label">Query · “{ranQuery}”</p>
+                {error && (
+                  <p className="font-mono text-[11px] text-accent">{error}</p>
+                )}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {STAGE_ORDER.map((channel, index) => {
+                  const stage = byName.get(channel);
+                  const baselineName = MEASURED_AGAINST[channel];
+                  const baseline = baselineName ? byName.get(baselineName) : undefined;
+                  return (
+                    <StageColumn
+                      key={channel}
+                      channel={channel}
+                      step={index + 1}
+                      stage={stage}
+                      baseline={baseline}
+                      baselineName={baselineName}
+                      // Only the next unfilled column is actually being worked on.
+                      pending={!stage && running && stages.length === index}
+                      waiting={!stage && running && stages.length < index}
+                    />
+                  );
+                })}
               </div>
             </>
           )}
@@ -168,57 +158,99 @@ export function LabView() {
   );
 }
 
-function ModeColumn({
-  mode,
-  list,
+function StageColumn({
+  channel,
+  step,
+  stage,
   baseline,
+  baselineName,
+  pending,
+  waiting,
 }: {
-  mode: RetrievalMode;
-  list: Source[];
-  baseline: Map<number, number> | null;
+  channel: Channel;
+  step: number;
+  stage?: LiveStage;
+  baseline?: LiveStage;
+  baselineName?: Channel;
+  pending: boolean;
+  waiting: boolean;
 }) {
-  const channel = COLUMN_CHANNEL[mode];
-  // Per column: RRF scores sit near 0.03 while cosine and cross-encoder scores
-  // sit near 0.7, so a bar scaled across all three modes would flatten hybrid to
-  // nothing. Within a column the bars compare the thing worth comparing --
-  // how far each result trails the one above it.
-  const maxScore = list.length > 0 ? Math.max(...list.map((s) => s.score)) : 0;
+  // Within a column, not across them: RRF scores sit near 0.03 while cosine and
+  // cross-encoder scores sit near 0.7, so one shared scale would flatten fusion
+  // to nothing.
+  const maxScore = stage && stage.results.length > 0
+    ? Math.max(...stage.results.map((s) => s.score))
+    : 0;
+  const ranks = baseline ? rankMap(baseline.results) : null;
 
   return (
-    <div className="overflow-hidden rounded-card border border-line bg-panel">
-      <div
-        className="h-0.5 w-full"
-        style={channelStyle(channel)}
-        aria-hidden
-      />
-      <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
-        <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-ink">
-          <span
-            className="inline-block h-1.5 w-1.5 rounded-full"
-            style={channelStyle(channel)}
-            aria-hidden
-          />
-          {MODE_LABEL[mode]}
-        </span>
-        <span className="font-mono text-[10px] text-faint">
-          {baseline ? "vs prev" : "baseline"}
-        </span>
+    <div
+      className={cn(
+        "overflow-hidden rounded-card border bg-panel transition-opacity duration-300",
+        stage ? "border-line" : "border-dashed border-line",
+        waiting && "opacity-45",
+      )}
+    >
+      <div className="h-0.5 w-full" style={stage ? channelStyle(channel) : undefined} aria-hidden />
+      <div className="border-b border-line px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-ink">
+            <span
+              className={cn(
+                "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+                pending && "animate-pulse-dot",
+              )}
+              style={stage || pending ? channelStyle(channel) : { backgroundColor: "var(--line-strong)" }}
+              aria-hidden
+            />
+            <span className="truncate">
+              {step}. {CHANNEL_LABELS[channel]}
+            </span>
+          </span>
+          {stage ? (
+            // The real elapsed time. This is why the columns arrive when they do.
+            <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted">
+              {Math.round(stage.elapsed_ms)}ms
+            </span>
+          ) : (
+            <span className="shrink-0 font-mono text-[10px] text-faint">
+              {pending ? "running" : "queued"}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-[11px] leading-snug text-faint">{CHANNEL_HINTS[channel]}</p>
+        {stage && (
+          <p className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.1em] text-faint">
+            {/* The funnel, stated: the first stages hold a hundred candidates and
+                show eight, while rerank returns the top k it selected. Without
+                the counts the last column reads as though it lost results. */}
+            {stage.results.length === stage.total
+              ? `${stage.total} kept`
+              : `${stage.results.length} of ${stage.total}`}
+            {baselineName && ` · vs ${baselineName}`}
+          </p>
+        )}
       </div>
-      {list.length === 0 ? (
-        <p className="px-3 py-6 text-center text-[12px] text-faint">No results.</p>
+
+      {!stage ? (
+        <div className="px-3 py-8 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-faint">
+            {pending ? "Scoring" : "Waiting"}
+          </p>
+        </div>
+      ) : stage.results.length === 0 ? (
+        <p className="px-3 py-6 text-center text-[12px] text-faint">
+          Nothing matched at this stage.
+        </p>
       ) : (
         <ol className="divide-y divide-line">
-          {list.map((s, i) => (
-            <li key={`${s.id}-${i}`} className="px-3 py-2.5">
+          {stage.results.map((s, i) => (
+            <li key={`${s.id}-${i}`} className="animate-rise-in px-3 py-2.5">
               <div className="flex items-center gap-2">
-                <span className="w-5 shrink-0 font-mono text-[11px] tabular-nums text-faint">
+                <span className="w-4 shrink-0 font-mono text-[11px] tabular-nums text-faint">
                   {i + 1}
                 </span>
-                <RankDelta
-                  current={i + 1}
-                  previous={baseline?.get(s.id)}
-                  hasBaseline={baseline != null}
-                />
+                <RankDelta current={i + 1} previous={ranks?.get(s.id)} hasBaseline={ranks != null} />
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
                   {s.startup_name}
                 </span>
@@ -226,14 +258,9 @@ function ModeColumn({
                   {formatScore(s.score)}
                 </span>
               </div>
-              <ScoreBar
-                score={s.score}
-                maxScore={maxScore}
-                channel={channel}
-                className="mt-1.5"
-              />
+              <ScoreBar score={s.score} maxScore={maxScore} channel={channel} className="mt-1.5" />
               <p className="mt-1.5 text-[12px] leading-snug text-muted">
-                {truncate(s.text, 110)}
+                {truncate(s.text, 100)}
               </p>
             </li>
           ))}
@@ -254,9 +281,10 @@ function RankDelta({
 }) {
   if (!hasBaseline) return <span className="w-9 shrink-0" />;
 
-  // This column's effect on the ranking is the finding the lab exists to show,
-  // so it is the one thing here drawn in colour. Promotions and new entries are
-  // what a stage contributes; demotions are what it takes away, and recede.
+  // This stage's effect on the ranking is the finding the page exists to show,
+  // so it is the one thing drawn in colour. A chunk this stage introduced is
+  // marked new -- in the keyword column those are precisely the results vector
+  // search missed, and therefore the ones with the power to displace it.
   if (previous == null) {
     return (
       <span className="inline-flex w-9 shrink-0 justify-start font-mono text-[9px] uppercase tracking-wider text-keyword">
@@ -266,9 +294,7 @@ function RankDelta({
   }
   const delta = previous - current;
   if (delta === 0) {
-    return (
-      <span className="w-9 shrink-0 font-mono text-[10px] text-faint">—</span>
-    );
+    return <span className="w-9 shrink-0 font-mono text-[10px] text-faint">—</span>;
   }
   const up = delta > 0;
   return (
@@ -279,8 +305,8 @@ function RankDelta({
       )}
       title={
         up
-          ? `Promoted ${delta} place${delta > 1 ? "s" : ""} by this stage`
-          : `Pushed down ${Math.abs(delta)} place${Math.abs(delta) > 1 ? "s" : ""} by this stage`
+          ? `Moved up ${delta} place${delta > 1 ? "s" : ""} at this stage`
+          : `Pushed down ${Math.abs(delta)} place${Math.abs(delta) > 1 ? "s" : ""} at this stage`
       }
     >
       {up ? <ArrowUp size={10} /> : <ArrowDown size={10} />}

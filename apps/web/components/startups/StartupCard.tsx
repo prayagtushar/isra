@@ -25,7 +25,9 @@ export function StartupCard({
           {startup.name}
         </span>
         {funding && (
-          <span className="shrink-0 font-mono text-[10px] tabular-nums text-faint">
+          // Valuation is the only figure on the card, and the accent marks it as
+          // a measurement rather than more prose.
+          <span className="shrink-0 font-mono text-[10px] tabular-nums text-accent">
             {funding}
           </span>
         )}

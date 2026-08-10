@@ -1,5 +1,5 @@
 import time
-from typing import List, Literal, TypedDict
+from typing import Iterator, List, Literal, TypedDict
 
 from isra_retrieval.db import get_conn
 from isra_retrieval.embeddings import embed_query
@@ -26,13 +26,38 @@ class RetrievalTrace(TypedDict):
 TRACE_STAGE_LIMIT = 8
 
 
-def retrieve_debug(
+class StageEvent(TypedDict):
+    """One stage, reported the moment it finishes."""
+
+    name: Literal["vector", "keyword", "fusion", "rerank"]
+    results: List[Chunk]
+    elapsed_ms: float
+    # How many candidates the stage produced, before results was truncated for
+    # display. Without it the funnel is unreadable: the first three stages show 8
+    # of a hundred-odd candidates while rerank shows all top_k of its output, so
+    # the last column looks like it lost results rather than selected them.
+    total: int
+
+
+def retrieve_stages(
     query: str,
     top_k: int = 5,
     mode: str = "hybrid+rerank",
     retrieval_top_k: int = 100,
     rerank_top_k: int = 20,
-) -> RetrievalTrace:
+) -> Iterator[StageEvent]:
+    """Run the pipeline, yielding each stage as it completes.
+
+    The stages genuinely finish at different times, and by a wide margin: vector
+    and keyword search are two indexed queries, while the cross-encoder scores
+    every fused candidate and dominates the total. Yielding as we go lets a
+    caller show the first three almost immediately and explain the wait for the
+    fourth, instead of holding everything back and then revealing it in an order
+    the data no longer supports.
+
+    Each event carries elapsed_ms measured from the start of the run, so a
+    consumer can report the real cost of each stage rather than guessing.
+    """
     if mode not in RETRIEVAL_MODES:
         raise ValueError(
             f"Mode {mode!r} is not supported. Use one of {RETRIEVAL_MODES}"
@@ -40,47 +65,91 @@ def retrieve_debug(
 
     start = time.perf_counter()
 
+    def elapsed() -> float:
+        return (time.perf_counter() - start) * 1000
+
     with get_conn() as conn:
         query_vector = embed_query(query)
 
         if mode == "vector":
             vector_results = vector_search(conn, query_vector, top_k=retrieval_top_k)
-            stages: List[StageSnapshot] = [
-                {"name": "vector", "results": vector_results[:TRACE_STAGE_LIMIT]},
-            ]
-            return {
-                "mode": "vector",
-                "latency_ms": (time.perf_counter() - start) * 1000,
-                "stages": stages,
+            yield {
+                "name": "vector",
+                "results": vector_results[:TRACE_STAGE_LIMIT],
+                "elapsed_ms": elapsed(),
+                "total": len(vector_results),
             }
+            return
 
         vector_results = vector_search(conn, query_vector, top_k=retrieval_top_k)
+        yield {
+            "name": "vector",
+            "results": vector_results[:TRACE_STAGE_LIMIT],
+            "elapsed_ms": elapsed(),
+            "total": len(vector_results),
+        }
+
         keyword_results = search_keyword(conn, query, top_k=retrieval_top_k)
+        yield {
+            "name": "keyword",
+            "results": keyword_results[:TRACE_STAGE_LIMIT],
+            "elapsed_ms": elapsed(),
+            "total": len(keyword_results),
+        }
+
         fusion_results = rrf_fusion(
             vector_results, keyword_results, top_k=retrieval_top_k
         )
-
-        stages = [
-            {"name": "vector", "results": vector_results[:TRACE_STAGE_LIMIT]},
-            {"name": "keyword", "results": keyword_results[:TRACE_STAGE_LIMIT]},
-            {"name": "fusion", "results": fusion_results[:TRACE_STAGE_LIMIT]},
-        ]
+        yield {
+            "name": "fusion",
+            "results": fusion_results[:TRACE_STAGE_LIMIT],
+            "elapsed_ms": elapsed(),
+            "total": len(fusion_results),
+        }
 
         if mode == "hybrid":
-            return {
-                "mode": "hybrid",
-                "latency_ms": (time.perf_counter() - start) * 1000,
-                "stages": stages,
-            }
+            return
 
-        rerank_results = rerank(query, fusion_results, top_k=top_k, rerank_top_k=rerank_top_k)
-        stages.append({"name": "rerank", "results": rerank_results[:TRACE_STAGE_LIMIT]})
-
-        return {
-            "mode": "hybrid+rerank",
-            "latency_ms": (time.perf_counter() - start) * 1000,
-            "stages": stages,
+        rerank_results = rerank(
+            query, fusion_results, top_k=top_k, rerank_top_k=rerank_top_k
+        )
+        yield {
+            "name": "rerank",
+            "results": rerank_results[:TRACE_STAGE_LIMIT],
+            "elapsed_ms": elapsed(),
+            "total": len(rerank_results),
         }
+
+
+def retrieve_debug(
+    query: str,
+    top_k: int = 5,
+    mode: str = "hybrid+rerank",
+    retrieval_top_k: int = 100,
+    rerank_top_k: int = 20,
+) -> RetrievalTrace:
+    """The whole trace at once, for callers that cannot consume a stream.
+
+    Built on retrieve_stages so there is one description of the pipeline. Two
+    copies would drift, and the copy that drifted would be the one shown to a
+    reader as an explanation of what the other one did.
+    """
+    start = time.perf_counter()
+    stages: List[StageSnapshot] = []
+    for event in retrieve_stages(
+        query,
+        top_k=top_k,
+        mode=mode,
+        retrieval_top_k=retrieval_top_k,
+        rerank_top_k=rerank_top_k,
+    ):
+        stages.append({"name": event["name"], "results": event["results"]})
+
+    return {
+        "mode": mode,  # type: ignore[typeddict-item]
+        "latency_ms": (time.perf_counter() - start) * 1000,
+        "stages": stages,
+    }
 
 
 def retrieve(

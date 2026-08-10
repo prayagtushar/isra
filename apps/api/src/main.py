@@ -15,7 +15,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
-from isra_retrieval.pipeline import retrieve, retrieve_debug, RetrievalTrace
+from isra_retrieval.pipeline import (
+    RetrievalTrace,
+    retrieve,
+    retrieve_debug,
+    retrieve_stages,
+)
 from isra_retrieval.db import get_conn
 
 from src.budget import DailyBudget
@@ -133,8 +138,12 @@ async def health():
     return {"status": "ok"}
 
 class SearchRequest(BaseModel):
-    query: str
-    top_k: int = 5
+    # Bounded for the same reason ChatRequest is: /search and /search/trace are
+    # open to anyone and both run the cross-encoder. top_k was unbounded, so a
+    # caller could ask the reranker for an arbitrary number of results, and an
+    # empty query was accepted and passed to the embedder.
+    query: str = Field(..., min_length=1, max_length=600)
+    top_k: int = Field(default=5, ge=1, le=10)
     mode: Literal["vector", "hybrid", "hybrid+rerank"] = "vector"
 
 class SearchResult(BaseModel):
@@ -182,6 +191,87 @@ async def search(req: SearchRequest):
     finally:
         if span:
             span.end()
+
+def _chunk_to_json(c) -> dict:
+    return {
+        "id": c.id,
+        "startup_name": c.startup_name,
+        "chunk_index": c.chunk_index,
+        "text": c.text,
+        "source_url": c.source_url,
+        "score": c.score,
+    }
+
+async def _search_trace_stream(query: str, top_k: int, mode: str):
+    """Emit one event per pipeline stage, as each finishes.
+
+    The stages really do complete at different times, by a wide margin: vector
+    and keyword search are two indexed queries, while the cross-encoder scores
+    every fused candidate and accounts for most of the wall clock. Streaming
+    them means the first three land almost immediately and the wait for the
+    fourth is attributable, instead of everything arriving at once and being
+    revealed in an order the timings no longer support.
+
+    retrieve_stages blocks, so it is advanced one step at a time in a worker
+    thread. Running it inline would stall the event loop for the length of the
+    rerank and delay every other request on the instance.
+    """
+    span = None
+    if _langfuse:
+        span = _langfuse.start_observation(
+            as_type="retriever",
+            name="search_trace",
+            input={"query": query, "mode": mode},
+        )
+
+    stages = retrieve_stages(query, top_k=top_k, mode=mode)
+    finished = object()
+
+    def advance():
+        try:
+            return next(stages)
+        except StopIteration:
+            return finished
+
+    emitted: list[str] = []
+    try:
+        while True:
+            event = await asyncio.to_thread(advance)
+            if event is finished:
+                break
+            emitted.append(event["name"])
+            payload = {
+                "type": "stage",
+                "name": event["name"],
+                "elapsed_ms": round(event["elapsed_ms"], 1),
+                "total": event["total"],
+                "results": [_chunk_to_json(c) for c in event["results"]],
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done', 'stages': emitted})}\n\n"
+        if span:
+            span.update(output={"stages": emitted})
+    except Exception as exc:
+        logging.exception("search trace failed")
+        yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+    finally:
+        stages.close()
+        if span:
+            span.end()
+
+@app.post("/search/trace")
+async def search_trace(req: SearchRequest):
+    """Server-sent events, one per retrieval stage.
+
+    Inherits /search's rate limit -- rate_limit matches by prefix, and it should
+    here, because this runs the same cross-encoder.
+    """
+    return StreamingResponse(
+        _search_trace_stream(req.query, req.top_k, req.mode),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 class HistoryTurn(BaseModel):
     role: Literal["user", "assistant"]

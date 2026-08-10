@@ -43,6 +43,21 @@ export interface RetrievalTrace {
   stages: TraceStage[];
 }
 
+/** A pipeline stage as /search/trace reports it, the moment it finishes. */
+export interface LiveStage {
+  name: Exclude<StageName, "generate">;
+  /** Milliseconds from the start of the run to the end of this stage. */
+  elapsed_ms: number;
+  /** Candidates this stage produced, before `results` was truncated for display. */
+  total: number;
+  results: Source[];
+}
+
+export type TraceEvent =
+  | ({ type: "stage" } & LiveStage)
+  | { type: "done"; stages: LiveStage["name"][] }
+  | { type: "error"; message: string };
+
 export type ChatEvent =
   | { type: "sources"; sources: Source[] }
   | { type: "token"; content: string }

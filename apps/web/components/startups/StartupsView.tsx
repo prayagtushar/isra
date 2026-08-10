@@ -191,8 +191,8 @@ function SectorChip({
       className={cn(
         "rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.1em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40",
         active
-          ? "border-ink bg-ink text-base"
-          : "border-line text-faint hover:text-ink",
+          ? "border-accent bg-accent text-panel"
+          : "border-line text-faint hover:border-line-strong hover:text-ink",
       )}
     >
       {children}

@@ -3,59 +3,69 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ---------------------------------------------------------------------------
-   Palette — warm neutrals, ink, and a terracotta-to-amber range.
+   Palette — parchment and ink, with one hue per retrieval channel.
 
-   Colour still carries meaning rather than decoration: the two search channels
-   own the two orange tones, and the final ranking they produce is drawn in ink,
-   so a reader can see two coloured inputs resolving into one authoritative
-   result.
+   The ground is a warm off-white rather than white, and the dark theme is a
+   warm near-black rather than a neutral one, so neither reads as a black-and-
+   white terminal. Nothing here uses a gradient.
 
-     terracotta -> vector search    amber -> keyword search    ink -> final rank
+   Colour is load-bearing, not decoration: each stage of the pipeline owns a hue,
+   so a bar tells you which search produced a result without reading a label.
+   The two inputs differ in kind, so they differ in temperature — a cool teal for
+   similarity computed from an embedding, a warm ochre for a literal word match.
+   Their combination takes the terracotta between them, and the cross-encoder's
+   final say is drawn in ink, the highest-contrast tone on the page.
+
+     teal      vector search    similarity in embedding space
+     ochre     keyword search   Postgres full-text, literal matches
+     terracotta  RRF fusion     the two lists reconciled
+     ink       BGE rerank       the ranking that is actually served
 --------------------------------------------------------------------------- */
 
 :root {
-  --base: #fbfbfa;
-  --panel: #ffffff;
-  --panel-2: #f3f3f1;
-  --ink: #141413;
-  --muted: #6e6e69;
-  --faint: #a3a39d;
-  --line: rgb(20 20 18 / 0.09);
-  --line-strong: rgb(20 20 18 / 0.16);
+  --base: #f6f3ec;
+  --panel: #fffdf7;
+  --panel-2: #ebe5d8;
+  --ink: #1b1a15;
+  --muted: #6b6455;
+  --faint: #9c9482;
+  --line: rgb(27 26 21 / 0.11);
+  --line-strong: rgb(27 26 21 / 0.2);
 
-  --accent: #c8553d;
-  --accent-soft: rgb(200 85 61 / 0.1);
-  --focus: #141413;
+  --accent: #b34f2c;
+  --accent-soft: rgb(179 79 44 / 0.11);
+  --focus: #1b1a15;
 
-  /* Two orange tones far enough apart in hue and lightness to tell apart, plus
-     ink for the resolved ranking. */
-  --vector: #c8553d;
-  --keyword: #b9791d;
-  --rerank: #141413;
+  --vector: #1c6b66;
+  --keyword: #a8761a;
+  --fusion: #b34f2c;
+  --rerank: #1b1a15;
 
-  --shadow-panel: 0 1px 2px rgb(20 20 18 / 0.04), 0 1px 1px rgb(20 20 18 / 0.03);
-  --shadow-lift: 0 10px 30px -12px rgb(20 20 18 / 0.18);
+  --shadow-panel: 0 1px 2px rgb(27 26 21 / 0.05), 0 1px 1px rgb(27 26 21 / 0.03);
+  --shadow-lift: 0 10px 30px -12px rgb(27 26 21 / 0.22);
 }
 
 .dark {
-  --base: #0a0a0a;
-  --panel: #131312;
-  --panel-2: #1c1c1a;
-  --ink: #f4f4f1;
-  --muted: #9a9a93;
-  --faint: #6b6b64;
-  --line: rgb(255 255 255 / 0.1);
-  --line-strong: rgb(255 255 255 / 0.2);
+  /* Warm charcoal, so the parchment identity survives the theme switch. */
+  --base: #14120e;
+  --panel: #1c1a15;
+  --panel-2: #26231b;
+  --ink: #f4f1e6;
+  --muted: #a49b86;
+  --faint: #6f6857;
+  --line: rgb(244 241 230 / 0.11);
+  --line-strong: rgb(244 241 230 / 0.22);
 
-  --accent: #e4674a;
-  --accent-soft: rgb(228 103 74 / 0.14);
-  --focus: #f4f4f1;
+  --accent: #e07a52;
+  --accent-soft: rgb(224 122 82 / 0.15);
+  --focus: #f4f1e6;
 
-  /* Lifted off the black ground; ink inverts to paper so the resolved ranking
-     stays the highest-contrast row on the page. */
-  --vector: #e4674a;
-  --keyword: #e0a340;
-  --rerank: #f4f4f1;
+  /* Lifted off the dark ground; ink inverts to parchment so the served ranking
+     stays the highest-contrast row either way. */
+  --vector: #3fa8a0;
+  --keyword: #d8a441;
+  --fusion: #e07a52;
+  --rerank: #f4f1e6;
 
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-lift: 0 10px 30px -12px rgb(0 0 0 / 0.6);
@@ -76,6 +86,7 @@
 
   --color-vector: var(--vector);
   --color-keyword: var(--keyword);
+  --color-fusion: var(--fusion);
   --color-rerank: var(--rerank);
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
