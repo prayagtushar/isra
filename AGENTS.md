@@ -2,7 +2,7 @@
 
 > Onboarding reference for AI coding agents working on this repo. Read this before modifying code or running commands.
 >
-> Verified against `7596df8` on 2026-08-11.
+> Verified against `af0b6f0` on 2026-08-11.
 
 ---
 
@@ -103,7 +103,7 @@ This is a **Turborepo + uv workspace** monorepo.
 
 - **Stack:** Next.js 16.2.0, React 19.2.0, TypeScript 5.9.2, Bun, Tailwind CSS v4, Framer Motion, Radix Slot.
 - **Pages:** every page is public. `/` is the chat itself. There is no landing page and no sign-in.
-- **Auth: none.** Accounts were removed in `787276a`. The only gate is a shared
+- **Auth: none.** Accounts were removed in `7e40ccd`. The only gate is a shared
   `ISRA_ADMIN_KEY` on `POST /ingest`, sent as `X-ISRA-Admin-Key`. Abuse is bounded
   server-side instead, by per-IP rate limits, request size caps, and a global daily
   ceiling on generated answers.
@@ -293,7 +293,7 @@ tests and production build.
 ## Environment variables and secrets
 
 There is no `AUTH_SECRET` and there are no session cookies. Accounts were removed
-in `787276a`, so there is nothing to sign.
+in `7e40ccd`, so there is nothing to sign.
 
 **API**
 
