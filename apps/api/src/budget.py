@@ -1,16 +1,4 @@
-"""A hard ceiling on how much LLM work the public demo will do per day.
-
-Per-IP rate limits stop one impatient visitor. They do not stop a bot pool, and
-the demo is ungated so that recruiters can use it without signing up — so the
-thing that actually protects the account balance is a single global counter with
-a daily allowance. When it is spent, ``/chat`` stops calling the model and says
-so, and retrieval keeps working because it costs nothing per request.
-
-Held in process, which is accurate while the service runs with
-``--max-instances 1``. A restart resets the day's tally, so this is a spend
-ceiling rather than an audited ledger — the billing budget in GCP is still the
-backstop.
-"""
+"""A hard daily ceiling on LLM spend for the open demo. In process, accurate at --max-instances 1."""
 
 import time
 from collections.abc import Callable
@@ -59,8 +47,7 @@ class DailyBudget:
         resets_in = self._seconds_until_reset()
 
         if self._spent + amount > self._limit:
-            # Refusals must not accumulate, or a burst of rejected requests would
-            # keep the budget exhausted after it should have recovered.
+            # Refusals must not accumulate, or rejected requests would keep the budget exhausted.
             return BudgetDecision(
                 allowed=False,
                 remaining=max(0, self._limit - self._spent),

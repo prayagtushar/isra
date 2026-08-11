@@ -1,10 +1,4 @@
-"""Per-client rate limiting for the public API.
-
-The deployed service runs with ``--max-instances 1``, so an in-process sliding
-window is an accurate global limit rather than a per-replica approximation. If
-the service is ever scaled past one instance this needs to move to a shared
-store (Redis, or a Postgres table) — the limits become per-instance otherwise.
-"""
+"""Per-client rate limiting. An in-process window is a true global limit only at --max-instances 1."""
 
 import secrets
 import time
@@ -12,8 +6,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 
-# How many requests a single client may make in a window. The budgets are sized
-# by what each endpoint costs us: LLM tokens > database writes > reads.
+# Sized by what each endpoint costs: LLM tokens > database writes > reads.
 _IDLE_EVICTION_SECONDS = 900.0
 
 
@@ -65,13 +58,7 @@ def rule_for_path(path: str) -> Rule | None:
 def client_ip(
     forwarded_for: str | None, peer: str | None, trusted_hops: int
 ) -> str:
-    """Resolve the caller's address from the X-Forwarded-For chain.
-
-    Only the rightmost ``trusted_hops`` entries were written by infrastructure we
-    control; anything further left is attacker-controlled and must not be used as
-    a limiter key. On Cloud Run exactly one hop is appended, so the caller sits
-    second from the right.
-    """
+    """Resolve the caller from X-Forwarded-For, trusting only the rightmost hops we control."""
     if trusted_hops <= 0 or not forwarded_for:
         return peer or "unknown"
     parts = [p.strip() for p in forwarded_for.split(",") if p.strip()]
@@ -93,14 +80,7 @@ def resolve_client(
     peer: str | None,
     trusted_hops: int,
 ) -> str:
-    """Identify the caller, trusting the web app's proxy only when it proves itself.
-
-    The Next.js app calls this API server-side, so without a forwarded address
-    every browser looks like the same one or two hosting egress IPs and a single
-    visitor could exhaust the budget for everyone. The forwarded address is only
-    honoured when the caller knows the shared secret; otherwise anyone could
-    send a fresh address per request and never be limited at all.
-    """
+    """Identify the caller, honouring the proxy's forwarded address only when it knows the secret."""
     if proxy_secret and proxy_client_ip and proxy_secret_header:
         if secrets.compare_digest(proxy_secret_header, proxy_secret):
             return proxy_client_ip
@@ -115,8 +95,7 @@ class RateLimiter:
         clock: Callable[[], float] = time.monotonic,
     ):
         self._default = default
-        # Policy is injected rather than read from the module table so the
-        # limiter stays a plain mechanism that is easy to test in isolation.
+        # Policy is injected rather than read from the module table, so this stays easy to test.
         self._rules = rules if rules is not None else {}
         self._clock = clock
         self._hits: dict[tuple[str, str], deque[float]] = {}

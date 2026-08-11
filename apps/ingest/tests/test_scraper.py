@@ -113,18 +113,14 @@ MISMATCHED_LINK_HTML = """
 """
 
 def test_parse_unicorn_table_rejects_link_to_unrelated_article():
-    # Wikipedia's list sometimes links a company name to a *different*
-    # company's article (e.g. "Krutrim" -> /wiki/Ola_Electric). Enriching from
-    # that article contaminates the record, so the slug must be dropped —
-    # a stub description beats the wrong company's data.
+    # A row can link to another company's article; a stub beats the wrong company's data.
     records = parse_unicorn_table(MISMATCHED_LINK_HTML)
     assert [r.name for r in records] == ["Krutrim", "Ola Consumer"]
 
     krutrim, ola_consumer = records
     assert krutrim.slug is None
 
-    # Partial overlaps are legitimate ("Ola Consumer" -> Ola_Cabs,
-    # "Oyo" -> Oyo_Rooms) and must survive the guard.
+    # Partial overlaps are legitimate ("Oyo" -> Oyo_Rooms) and must survive the guard.
     assert ola_consumer.slug == "Ola_Cabs"
 
 def test_parse_infobox():
@@ -150,8 +146,7 @@ def test_build_startup_without_article_synthesizes_description():
     assert s.sectors == ["Financial Technology", "Payments"]
     assert s.founders == ["Harshil Mathur", "Shashank Kumar"]
     assert s.founded_year is None
-    # The stub states facts about this company rather than the word "unicorn",
-    # which every record in a corpus of Indian unicorns would share.
+    # The stub states facts about this company, not the word every record would share.
     assert "US$7.5 billion" in s.description
     assert "Harshil Mathur" in s.description
 
@@ -180,13 +175,7 @@ def test_build_startup_defaults_founders_when_missing():
     assert s.founders == ["Unknown"]
     assert len(s.description) >= 5
 
-# --- list values split across markup, not commas -----------------------------
-#
-# The fixtures above separate industries with commas, which is why the bug they
-# were meant to cover went unnoticed for the whole corpus: real infoboxes use
-# <br> or a <ul>, and get_text() with no separator argument joins the pieces
-# with nothing at all. That produced sector chips like
-# "Financial technologyPaymentsAdware" on the live site.
+# --- list values split across markup, not commas ---
 
 INFOBOX_LIST_MARKUP = """
 <table class="infobox">
@@ -219,9 +208,7 @@ INFOBOX_CITED_LIST_MARKUP = """
 """
 
 def test_clean_strips_editorial_markers_not_just_numbered_footnotes():
-    """Only [1]-style footnotes were removed, so a description reached the
-    corpus reading "As of August 2024,[update] ..." -- and the description is
-    what gets embedded and rendered, not merely stored."""
+    """[update]-style markers get embedded and rendered, not merely stored."""
     assert _clean("As of August 2024,[update] it operates 250 stores.[12]") == (
         "As of August 2024, it operates 250 stores."
     )
@@ -230,15 +217,11 @@ def test_clean_strips_editorial_markers_not_just_numbered_footnotes():
     )
 
 def test_clean_keeps_brackets_that_are_part_of_the_text():
-    """The marker list is enumerated rather than matched by shape, so a bracket
-    a company actually wrote is not silently deleted."""
+    """Markers are enumerated, so a bracket a company actually wrote is not deleted."""
     assert _clean("The product [Beta] shipped.") == "The product [Beta] shipped."
 
 def test_parse_infobox_drops_citation_markers_from_a_list():
-    """A reference renders as <sup>[1]</sup>. Inserting separators at every node
-    boundary first would turn it into "[, 1, ]", which the citation pattern no
-    longer matches -- leaving "1" and "[" as sectors in their own right. So the
-    citation has to be removed as markup, before the separators go in."""
+    """Citations go before separators, or <sup>[1]</sup> leaves "1" and "[" as sectors."""
     info = parse_infobox(INFOBOX_CITED_LIST_MARKUP)
     assert info["industry"] == ["Financial technology", "Payments"]
     assert info["founders"] == ["Vijay Shekhar Sharma"]
@@ -254,8 +237,7 @@ def test_parse_infobox_splits_industries_separated_by_line_breaks():
     assert parse_infobox(INFOBOX_BR_MARKUP)["industry"] == ["Cloud computing", "Backup"]
 
 def test_parse_infobox_splits_founders_separated_by_line_breaks():
-    """Same defect, and worse when it lands in founders: two people become one
-    person with an impossible name."""
+    """Same defect, worse in founders: two people become one impossible name."""
     assert parse_infobox(INFOBOX_BR_MARKUP)["founders"] == ["Jyoti Bansal", "Bipul Sinha"]
 
 TABLE_LIST_MARKUP = """
@@ -281,17 +263,11 @@ def test_parse_unicorn_table_splits_list_cells():
     assert record.founders == ["Aadit Palicha", "Kaivalya Vohra"]
 
 def test_parse_unicorn_table_keeps_a_name_containing_a_comma_intact():
-    """Splitting cells must not reach the name column: separators are inserted
-    at markup boundaries, and a name is one text node however it is punctuated."""
+    """Splitting cells must not reach the name column."""
     html = TABLE_LIST_MARKUP.replace("<td>Zepto</td>", "<td>Zepto, Inc.</td>")
     assert parse_unicorn_table(html)[0].name == "Zepto, Inc."
 
-# --- recovering an article the list page did not link ------------------------
-#
-# A row with no usable link meant no article fetch, so build_startup fell back
-# to a generated stub. That happened for 32 of 111 companies, and those stubs
-# are what /search returned: near-identical sentences with a name swapped in.
-# Searching by name recovers most of them.
+# --- recovering an article the list page did not link ---
 
 def _titles(
     *pages: tuple[str, bool],
@@ -324,15 +300,12 @@ def test_resolve_slug_accepts_an_article_that_exists_under_the_company_name():
     assert resolve_slug("Zepto", _titles(("Zepto (company)", True))) == "Zepto_(company)"
 
 def test_resolve_slug_returns_none_when_wikipedia_has_no_such_article():
-    """The common case, and not a bug: Wikipedia has no article for roughly a
-    third of the companies on its own unicorn list. Those keep their stub."""
+    """The common case, not a bug: a third of the list has no article, and keeps its stub."""
     assert resolve_slug("Razorpay", _titles(("Razorpay", False))) is None
     assert resolve_slug("Razorpay", {}) is None
 
 def test_resolve_slug_follows_a_redirect_even_to_an_unrecognizable_name():
-    """A redirect is an editor asserting that two names are one subject, which
-    is the only reliable signal for a company that has been renamed. Zomato
-    became Eternal Limited; no string comparison would connect those."""
+    """A redirect is an editor asserting two names are one subject. Zomato became Eternal Limited."""
     resolved = resolve_slug(
         "Zomato", _titles(("Eternal Limited", True), redirects={"Zomato": "Eternal Limited"})
     )
@@ -349,9 +322,7 @@ WEBSITE_INFOBOX_MARKUP = """
 """
 
 def test_parse_infobox_reads_type_of_site_when_there_is_no_industry():
-    """Internet companies use {{infobox website}}, which has no Industry row.
-    Zomato -- one of the best-known companies in the corpus -- came out with no
-    sector at all and could not be reached from the /startups filter."""
+    """{{infobox website}} has no Industry row, which left Zomato with no sector at all."""
     assert parse_infobox(WEBSITE_INFOBOX_MARKUP)["industry"] == ["Online food ordering"]
 
 def test_parse_infobox_prefers_industry_over_type_of_site():
@@ -361,19 +332,11 @@ def test_parse_infobox_prefers_industry_over_type_of_site():
     assert parse_infobox(both)["industry"] == ["Hospitality"]
 
 def test_parse_infobox_ignores_services_which_are_products_not_sectors():
-    """"Table reservation" is a feature, not a sector, and would show up as a
-    filter chip matching one company."""
+    """"Table reservation" is a feature, not a sector."""
     assert parse_infobox(WEBSITE_INFOBOX_MARKUP)["industry"] == ["Online food ordering"]
 
 def test_seed_details_scrapes_by_name_and_skips_what_has_no_article():
-    """These records exist to add companies the unicorn list misses. Before
-    this, four of them were hand-written fixtures in the corpus with company
-    homepages as their sources.
-
-    A name with no article is skipped rather than stubbed: a stub here adds a
-    name with nothing to retrieve, and if the company is on the unicorn list
-    that pass already produced its stub with a valuation attached.
-    """
+    """A name with no article is skipped, not stubbed: a stub adds nothing to retrieve."""
     from unittest.mock import patch
 
     with (
@@ -384,16 +347,13 @@ def test_seed_details_scrapes_by_name_and_skips_what_has_no_article():
         result = seed_details()
 
     assert [s.name for s in result] == ["Oyo"]
-    # Built through build_startup, so it carries the article's lead and infobox
-    # rather than a raw text dump.
+    # Built through build_startup, so it carries the lead and infobox, not a raw dump.
     assert "hospitality chain" in result[0].description.lower()
     assert result[0].founded_year == 2012
     assert str(result[0].source_url).endswith("Oyo")
 
 def test_resolve_slug_skips_a_disambiguation_page():
-    """A disambiguation page carries the company's exact name and nothing about
-    it. "Apna" reached the live corpus described as "Apna or APNA can mean:",
-    with no sector, because the title matched."""
+    """"Apna" reached the live corpus as "Apna or APNA can mean:" because the title matched."""
     resolved = resolve_slug("Apna", _titles(("Apna", True), disambiguations=("Apna",)))
     assert resolved is None
 
@@ -405,10 +365,7 @@ def test_resolve_slug_takes_the_company_page_beside_a_disambiguation_page():
     assert resolved == "Apna_(company)"
 
 def test_resolve_slug_prefers_a_matching_title_over_a_redirect():
-    """Real case, and the reason title matches are checked first: "Zepto"
-    redirects to "Metric prefix" -- the SI unit -- while the grocery company
-    lives at "Zepto (company)". Trusting the redirect first files an article
-    about scientific notation under a startup's name."""
+    """"Zepto" redirects to "Metric prefix"; the grocery company is at "Zepto (company)"."""
     resolved = resolve_slug(
         "Zepto",
         _titles(
@@ -420,18 +377,13 @@ def test_resolve_slug_prefers_a_matching_title_over_a_redirect():
     assert resolved == "Zepto_(company)"
 
 def test_resolve_slug_rejects_an_article_about_something_else():
-    """Wikipedia has an article at "MPL" -- a disambiguation page covering
-    Muslim personal law among others -- and none for Mobile Premier League.
-    Sharing a title is not being the same subject."""
+    """Sharing a title is not being the same subject: "MPL" is a disambiguation page."""
     assert resolve_slug("Meesho", _titles(("Meerut", True))) is None
 
 # --- the stub, when there is genuinely no article ----------------------------
 
 def test_stub_description_states_facts_rather_than_repeating_itself():
-    """The old stub's second sentence -- "It is featured on Wikipedia's list of
-    unicorn startup companies" -- was identical across every stubbed record, so
-    it added a strong shared signal to 32 chunks and helped distinguish none of
-    them. Whatever the row does know goes in instead."""
+    """The old second sentence was identical across every stub, so it distinguished none of them."""
     record = UnicornRecord(
         name="Zepto",
         slug=None,
@@ -445,9 +397,7 @@ def test_stub_description_states_facts_rather_than_repeating_itself():
     assert "5" in description
     assert "featured on Wikipedia's list" not in description
 
-    # No shared filler either. A clause repeated verbatim across the stubs is the
-    # same defect as the sentence above, whatever facts sit beside it: it was
-    # identical across 28 records and cost measurable retrieval quality.
+    # No shared filler either: a clause repeated across stubs is the same defect.
     assert "places it among" not in description
     assert "unicorns" not in description
 

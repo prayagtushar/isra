@@ -1,8 +1,5 @@
-# Cloud Build config for the ISRA API image.
-# The Dockerfile lives at apps/api/Dockerfile but needs the repo root as its
-# build context (uv workspace), so we can't use `gcloud builds submit --tag`.
+# The Dockerfile needs the repo root as context, so `builds submit --tag` will not do.
 #
-# Submit with:
 #   gcloud builds submit --config cloudbuild.yaml .
 steps:
   - name: gcr.io/cloud-builders/docker

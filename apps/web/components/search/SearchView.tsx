@@ -22,8 +22,7 @@ export function SearchView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Accepts an override so an example runs in one click rather than only
-  // filling the box.
+  // Accepts an override so an example runs in one click rather than only filling the box.
   const run = async (override?: string) => {
     const q = (override ?? query).trim();
     if (!q || loading) return;

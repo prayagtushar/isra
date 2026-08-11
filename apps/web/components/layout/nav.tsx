@@ -24,7 +24,6 @@ export const NAV: NavItem[] = [
 export function activeNav(pathname: string): NavItem | undefined {
   const exact = NAV.find((n) => pathname === n.href);
   if (exact) return exact;
-  // "/" is a prefix of every path, so the prefix match must skip it or Chat
-  // would light up on every route.
+  // "/" prefixes every path, so the prefix match must skip it or Chat lights up everywhere.
   return NAV.find((n) => n.href !== "/" && pathname.startsWith(n.href));
 }

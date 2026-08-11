@@ -1,11 +1,7 @@
 import { cn } from "@/lib/cn";
 import { channelStyle, type Channel } from "@/lib/channels";
 
-/**
- * The score meter used everywhere a ranked result appears. It is deliberately
- * the same shape in the trace, the lab and the search list so a reader learns
- * to compare bar lengths across surfaces.
- */
+/** The score meter, the same shape everywhere so bar lengths compare across surfaces. */
 export function ScoreBar({
   score,
   maxScore,

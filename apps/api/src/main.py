@@ -55,9 +55,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Indian Startup Ecosystem RAG API", lifespan=lifespan)
 
-# CORS: in production, set ISRA_CORS_ORIGINS to the deployed web domain(s).
-# Locally, allow everything. The Next.js proxy makes this mostly irrelevant,
-# but direct API callers (mobile, third-party) need it.
+# Set ISRA_CORS_ORIGINS to the deployed domain in production; locally allow everything.
 _cors_origins = os.environ.get("ISRA_CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
@@ -69,22 +67,17 @@ app.add_middleware(
 
 _rate_limiter = RateLimiter(rules=_RULES)
 
-# Cloud Run sits behind one Google front-end hop that appends to
-# X-Forwarded-For. Set to 0 when running the API with no proxy in front of it,
-# otherwise every caller is keyed on the proxy address instead of their own.
+# Cloud Run appends one hop to X-Forwarded-For. Set 0 when running with no proxy in front.
 _TRUSTED_PROXY_HOPS = int(os.environ.get("ISRA_TRUSTED_PROXY_HOPS", "1"))
 
 
-# Shared with the Next.js proxy so it can name the real caller. Unset means the
-# forwarded address is ignored, since it would otherwise be trivially spoofable.
+# Shared with the Next.js proxy so it can name the real caller. Unset means ignore it.
 _PROXY_SECRET = os.environ.get("ISRA_PROXY_SECRET") or None
 
 # Guards the only write endpoint. Unset means /ingest is closed entirely.
 _ADMIN_KEY = os.environ.get("ISRA_ADMIN_KEY") or None
 
-# Total answers the open demo will generate per UTC day, across everyone. This
-# is the ceiling on LLM spend; set to 0 to stop answering without redeploying,
-# or to -1 to remove the cap.
+# Answers per UTC day across everyone. 0 stops answering without a redeploy, -1 removes the cap.
 _daily_chat_budget = DailyBudget(
     limit=int(os.environ.get("ISRA_DAILY_CHAT_LIMIT", "200"))
 )
@@ -138,10 +131,7 @@ async def health():
     return {"status": "ok"}
 
 class SearchRequest(BaseModel):
-    # Bounded for the same reason ChatRequest is: /search and /search/trace are
-    # open to anyone and both run the cross-encoder. top_k was unbounded, so a
-    # caller could ask the reranker for an arbitrary number of results, and an
-    # empty query was accepted and passed to the embedder.
+    # Bounded like ChatRequest: both search endpoints are open and both run the cross-encoder.
     query: str = Field(..., min_length=1, max_length=600)
     top_k: int = Field(default=5, ge=1, le=10)
     mode: Literal["vector", "hybrid", "hybrid+rerank"] = "vector"
@@ -203,19 +193,7 @@ def _chunk_to_json(c) -> dict:
     }
 
 async def _search_trace_stream(query: str, top_k: int, mode: str):
-    """Emit one event per pipeline stage, as each finishes.
-
-    The stages really do complete at different times, by a wide margin: vector
-    and keyword search are two indexed queries, while the cross-encoder scores
-    every fused candidate and accounts for most of the wall clock. Streaming
-    them means the first three land almost immediately and the wait for the
-    fourth is attributable, instead of everything arriving at once and being
-    revealed in an order the timings no longer support.
-
-    retrieve_stages blocks, so it is advanced one step at a time in a worker
-    thread. Running it inline would stall the event loop for the length of the
-    rerank and delay every other request on the instance.
-    """
+    """Emit one event per stage as it finishes, advanced in a worker thread so the loop keeps running."""
     span = None
     if _langfuse:
         span = _langfuse.start_observation(
@@ -262,11 +240,7 @@ async def _search_trace_stream(query: str, top_k: int, mode: str):
 
 @app.post("/search/trace")
 async def search_trace(req: SearchRequest):
-    """Server-sent events, one per retrieval stage.
-
-    Inherits /search's rate limit -- rate_limit matches by prefix, and it should
-    here, because this runs the same cross-encoder.
-    """
+    """Server-sent events, one per retrieval stage. Inherits /search's limit by prefix."""
     return StreamingResponse(
         _search_trace_stream(req.query, req.top_k, req.mode),
         media_type="text/event-stream",
@@ -278,8 +252,7 @@ class HistoryTurn(BaseModel):
     content: str
 
 class ChatRequest(BaseModel):
-    # /chat is open to anyone, so the request itself has to be bounded: these
-    # caps put a ceiling on the prompt size a single call can produce.
+    # /chat is open to anyone, so these caps bound the prompt a single call can produce.
     question: str = Field(..., min_length=1, max_length=600)
     history: list[HistoryTurn] | None = Field(default=None, max_length=10)
     top_k: int = Field(default=5, ge=1, le=10)
@@ -371,9 +344,7 @@ async def _chat_stream(
     ]
     yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
 
-    # Sources are free to serve, so they are sent even when the day's answer
-    # budget is gone — the reader still gets the retrieval result, just not a
-    # generated answer. Checked here, immediately before the only paid call.
+    # Sources are free to serve, so they go out even when the answer budget is gone.
     spend = _daily_chat_budget.try_spend()
     if not spend.allowed:
         hours = max(1, round(spend.resets_in_seconds / 3600))
@@ -416,9 +387,7 @@ async def chat(req: ChatRequest):
             input={"question": req.question, "mode": req.mode, "history": history},
         )
 
-        # Bind the inner generator to its own name: `stream` is rebound to
-        # `_wrapped()` below, and the closure resolves it at call time, so
-        # iterating `stream` here would make the wrapper consume itself.
+        # Bind the inner generator to its own name: `stream` is rebound below and would self-consume.
         inner = stream
 
         async def _wrapped():
@@ -538,8 +507,7 @@ class IngestRequest(BaseModel):
 
 
 def _ingest_env() -> dict[str, str]:
-    # The ingest subprocess reads plain DATABASE_URL, but deployed containers
-    # only receive ISRA_DATABASE_URL (Secret Manager) — map it explicitly.
+    # The ingest subprocess reads plain DATABASE_URL; deployed containers only get the ISRA_ one.
     return {
         **os.environ,
         "PYTHONPATH": str(_INGEST_DIR),
@@ -593,9 +561,7 @@ async def _ingest_stream(limit: int | None, refresh: bool):
 async def ingest(req: IngestRequest, x_isra_admin_key: str | None = Header(default=None)):
     global _ingest_running
 
-    # The one write endpoint. A shared key rather than an account system: it
-    # stops a passer-by triggering a re-ingest and claims nothing more. An unset
-    # key refuses everything, so forgetting to configure it fails closed.
+    # The one write endpoint. An unset key refuses everything, so a missed config fails closed.
     if not _ADMIN_KEY or not x_isra_admin_key or not secrets.compare_digest(
         x_isra_admin_key, _ADMIN_KEY
     ):

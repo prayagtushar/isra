@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
-# Deploy the ISRA API to the `isra` Cloud Run service with a strict $1/month
-# budget config.
+# Deploy the ISRA API to Cloud Run.
 #
-# This script assumes:
-#   - GCP billing is enabled
-#   - gcloud is authenticated and project is set
-#   - The image already exists in Artifact Registry
-#   - Secrets isra-database-url and isra-openrouter-key exist in Secret Manager
-#
-# Usage:
-#   infra/deploy-api.sh [IMAGE_TAG]
-# Default tag: latest
+# Usage: infra/deploy-api.sh [IMAGE_TAG]      (default tag: latest)
 
 set -euo pipefail
 
@@ -22,22 +13,7 @@ IMAGE="asia-south1-docker.pkg.dev/${PROJECT_ID}/isra/api:${TAG}"
 
 echo "Deploying ${IMAGE} to Cloud Run service ${SERVICE} (${PROJECT_ID}/${REGION})..."
 
-# Cost guardrails:
-#   --min-instances 0        -> scale to zero, no always-on cost
-#   --max-instances 1        -> never more than one instance
-#   --concurrency 20         -> modest concurrent requests per instance
-#   --cpu-boost              -> faster cold start, no always-on cost
-#   --memory 4Gi --cpu 4     -> the BGE cross-encoder scores 20 query/chunk
-#                               pairs per rerank; on 1 vCPU that takes ~20s.
-#                               Cloud Run bills vCPU-seconds, so 4 vCPU for
-#                               ~5s costs the same as 1 vCPU for ~20s while
-#                               being 4x faster. Still scales to zero.
-#   --timeout 300            -> 5 min request ceiling
-#   --execution-environment gen2 -> required for CPU boost
-#
-# With this config, at most 1 vCPU is ever running, and only while requests are
-# active. Light traffic stays well under $1/month; Artifact Registry storage is
-# the main fixed cost (~$0.15/mo).
+# 4 vCPU is a cost choice: Cloud Run bills vCPU-seconds, so 4 for ~5s costs what 1 for ~20s does.
 gcloud run deploy "${SERVICE}" \
   --image "${IMAGE}" \
   --region "${REGION}" \

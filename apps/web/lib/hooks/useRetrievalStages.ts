@@ -5,14 +5,7 @@ import { useCallback, useRef, useState } from "react";
 import { parseSSE } from "@/lib/sse";
 import type { LiveStage, RetrievalMode, TraceEvent } from "@/lib/types";
 
-/**
- * Runs one query and collects the pipeline stages as they arrive.
- *
- * Stages are appended in the order the server finishes them, which is the order
- * the pipeline actually runs. Nothing here reorders or delays them: the reveal a
- * reader sees is the real timing, so the gap before the rerank column is the
- * cross-encoder's cost rather than an animation pretending to be one.
- */
+/** Runs one query and appends stages in the order the server finishes them, with no reordering. */
 export function useRetrievalStages() {
   const [stages, setStages] = useState<LiveStage[]>([]);
   const [running, setRunning] = useState(false);
@@ -25,8 +18,7 @@ export function useRetrievalStages() {
       const q = query.trim();
       if (!q) return;
 
-      // A second run while one is in flight would interleave two pipelines into
-      // one column set.
+      // A second run while one is in flight would interleave two pipelines into one column set.
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;

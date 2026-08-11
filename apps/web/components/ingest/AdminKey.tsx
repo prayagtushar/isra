@@ -13,14 +13,7 @@ export function getAdminKey(): string {
   }
 }
 
-/**
- * Holds the key that unlocks re-ingest.
- *
- * This is a shared secret typed into a browser, not authentication — anything
- * stored client-side is readable by whoever is sitting at the machine. It exists
- * so a passer-by cannot kick off a scrape and rewrite the corpus, and the copy
- * says exactly that rather than implying an account system.
- */
+/** Holds the key that unlocks re-ingest. A shared secret in a browser, not authentication. */
 export function AdminKey() {
   const [key, setKey] = useState("");
   const [saved, setSaved] = useState(false);

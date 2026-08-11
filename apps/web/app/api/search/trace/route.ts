@@ -6,15 +6,7 @@ import type { SearchRequest } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * Streams the retrieval stages through, rather than buffering them.
- *
- * The whole point of the endpoint is that vector and keyword search land in
- * milliseconds while the cross-encoder takes seconds, so the body is passed
- * along untouched and `no-transform` is set: a proxy that buffers this would
- * deliver all four stages at once and turn a live pipeline back into a
- * slideshow.
- */
+/** Streams stages through untouched; `no-transform` stops a proxy buffering them into a slideshow. */
 export async function POST(req: NextRequest): Promise<Response> {
   const body = (await req.json()) as SearchRequest;
 

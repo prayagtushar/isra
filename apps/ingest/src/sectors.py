@@ -1,28 +1,8 @@
-"""One vocabulary for sectors, across sources that disagree about it.
-
-Wikipedia infoboxes say "Financial technology". Y Combinator says "Fintech".
-Both end up in the same corpus, and nothing reconciled them, so the /startups
-filter offered about sixty chips for 111 companies -- including "E-Commerce"
-twice, and "Medical Device" next to "Medical Devices". Filtering on one of a
-pair silently hid the companies filed under the other.
-
-Two rules, and the second matters more than the first:
-
-  * Merge only spelling. Different words for the same sector collapse; different
-    sectors never do. "Financial Services" and "Financial Technology" stay
-    apart, because a bank is not a payments startup and a tidier filter is not
-    worth losing that.
-  * Stay a fixup list, not an allowlist. A sector nobody anticipated passes
-    through with its casing corrected, rather than being dropped or bucketed
-    into "Other" -- the corpus grows by scraping, so the unanticipated case is
-    the normal one.
-"""
+"""One sector vocabulary across sources that disagree. Merge spelling only, never distinct sectors."""
 
 from typing import Iterable, Optional
 
-# Spellings that mean the same sector, mapped onto the form to keep. Keys are
-# compared case-insensitively with punctuation and spacing removed, so
-# "E-commerce", "e commerce" and "ECOMMERCE" all reach the same entry.
+# Spellings that mean one sector. Keys compare case- and punctuation-insensitively.
 _SYNONYMS = {
     "fintech": "Financial Technology",
     "financialtechnology": "Financial Technology",
@@ -88,13 +68,7 @@ def _key(value: str) -> str:
     return "".join(char for char in value.lower() if char.isalnum())
 
 def _cap(piece: str) -> str:
-    """Capitalize one word, leaving short all-caps tokens as acronyms.
-
-    capitalize() alone would turn a scraped "HOSPITALITY" into "Hospitality"
-    (wanted) and an acronym like "DPIIT" into "Dpiit" (not wanted). Length is
-    the only signal available without an exhaustive list, and sector names are
-    words while sector acronyms are short.
-    """
+    """Capitalize one word, leaving short all-caps tokens as acronyms."""
     if piece.isupper() and len(piece) <= 5:
         return piece
     if "-" in piece:
@@ -102,11 +76,7 @@ def _cap(piece: str) -> str:
     return piece.capitalize()
 
 def _titlecase(value: str) -> str:
-    """Title-case a sector without mangling acronyms or joining words.
-
-    Each space- and slash-delimited piece is cased on its own, so "e-commerce"
-    and "AI / GPT" keep their punctuation.
-    """
+    """Title-case a sector without mangling acronyms or joining words."""
     words = []
     for index, word in enumerate(value.split()):
         pieces = []
@@ -128,11 +98,7 @@ def normalize_sector(value: str) -> str:
     return canonical if canonical else _titlecase(collapsed)
 
 def normalize_sectors(values: Iterable[Optional[str]]) -> list[str]:
-    """Canonicalize, drop blanks and duplicates, and sort.
-
-    Sorted because the filter renders in this order, and an unstable order
-    would reshuffle the chips on every ingest for no reason a reader could see.
-    """
+    """Canonicalize, drop blanks and duplicates, and sort so the chips render in a stable order."""
     seen: dict[str, str] = {}
     for value in values or []:
         if not value or not value.strip():

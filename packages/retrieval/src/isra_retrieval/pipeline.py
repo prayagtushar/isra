@@ -32,10 +32,7 @@ class StageEvent(TypedDict):
     name: Literal["vector", "keyword", "fusion", "rerank"]
     results: List[Chunk]
     elapsed_ms: float
-    # How many candidates the stage produced, before results was truncated for
-    # display. Without it the funnel is unreadable: the first three stages show 8
-    # of a hundred-odd candidates while rerank shows all top_k of its output, so
-    # the last column looks like it lost results rather than selected them.
+    # Candidates before truncation, or the funnel reads as loss rather than selection.
     total: int
 
 
@@ -46,18 +43,7 @@ def retrieve_stages(
     retrieval_top_k: int = 100,
     rerank_top_k: int = 20,
 ) -> Iterator[StageEvent]:
-    """Run the pipeline, yielding each stage as it completes.
-
-    The stages genuinely finish at different times, and by a wide margin: vector
-    and keyword search are two indexed queries, while the cross-encoder scores
-    every fused candidate and dominates the total. Yielding as we go lets a
-    caller show the first three almost immediately and explain the wait for the
-    fourth, instead of holding everything back and then revealing it in an order
-    the data no longer supports.
-
-    Each event carries elapsed_ms measured from the start of the run, so a
-    consumer can report the real cost of each stage rather than guessing.
-    """
+    """Run the pipeline, yielding each stage as it completes with elapsed_ms from the start."""
     if mode not in RETRIEVAL_MODES:
         raise ValueError(
             f"Mode {mode!r} is not supported. Use one of {RETRIEVAL_MODES}"
@@ -128,12 +114,7 @@ def retrieve_debug(
     retrieval_top_k: int = 100,
     rerank_top_k: int = 20,
 ) -> RetrievalTrace:
-    """The whole trace at once, for callers that cannot consume a stream.
-
-    Built on retrieve_stages so there is one description of the pipeline. Two
-    copies would drift, and the copy that drifted would be the one shown to a
-    reader as an explanation of what the other one did.
-    """
+    """The whole trace at once, built on retrieve_stages so the pipeline is described once."""
     start = time.perf_counter()
     stages: List[StageSnapshot] = []
     for event in retrieve_stages(

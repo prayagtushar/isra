@@ -16,34 +16,12 @@ import { formatScore, truncate } from "@/lib/format";
 import type { LiveStage, Source } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
-/**
- * The pipeline, one column per stage, in the order the server finishes them.
- *
- * This used to run three separate queries -- vector, hybrid, hybrid+rerank --
- * and compare their outputs. That cost three embeddings, three round trips and
- * three reranks to show less: the keyword list was never displayed at all, and
- * the keyword list is the whole explanation for the project's least comfortable
- * result, that RRF fusion loses direct lookups because keyword hits displace the
- * chunk vector search already had first.
- *
- * One run now reports all four stages as they complete. The columns are still
- * the three modes -- vector is what `vector` returns, fusion is what `hybrid`
- * returns, rerank is what `hybrid+rerank` returns -- with the step that was
- * previously invisible in between.
- */
+/** The pipeline, one column per stage, in the order the server finishes them. */
 
 // The order the pipeline runs in, which is also the order these arrive.
 const STAGE_ORDER: Channel[] = ["vector", "keyword", "fusion", "rerank"];
 
-/**
- * What each stage's movement is measured against.
- *
- * Fusion is compared to vector rather than to keyword, because that is the
- * comparison the eval set flagged: fusion's job is to improve on vector, and on
- * direct lookups it does the opposite. Keyword is also shown against vector, so
- * a result marked new in that column is exactly a chunk vector search missed --
- * the ones with the power to displace something.
- */
+/** What each stage's movement is measured against: fusion and keyword both against vector. */
 const MEASURED_AGAINST: Partial<Record<Channel, Channel>> = {
   keyword: "vector",
   fusion: "vector",
@@ -61,8 +39,7 @@ export function LabView() {
   const [query, setQuery] = useState("");
   const { stages, running, error, ranQuery, run } = useRetrievalStages();
 
-  // Always the full pipeline: the shorter modes are the earlier columns, so
-  // there is nothing a mode selector could reveal that is not already on screen.
+  // Always the full pipeline: the shorter modes are just the earlier columns.
   const start = (override?: string) => {
     const q = override ?? query;
     if (override) setQuery(override);
@@ -175,9 +152,7 @@ function StageColumn({
   pending: boolean;
   waiting: boolean;
 }) {
-  // Within a column, not across them: RRF scores sit near 0.03 while cosine and
-  // cross-encoder scores sit near 0.7, so one shared scale would flatten fusion
-  // to nothing.
+  // Within a column, not across: RRF scores near 0.03 would flatten against cosine near 0.7.
   const maxScore = stage && stage.results.length > 0
     ? Math.max(...stage.results.map((s) => s.score))
     : 0;
@@ -221,9 +196,7 @@ function StageColumn({
         <p className="mt-1 text-[11px] leading-snug text-faint">{CHANNEL_HINTS[channel]}</p>
         {stage && (
           <p className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.1em] text-faint">
-            {/* The funnel, stated: the first stages hold a hundred candidates and
-                show eight, while rerank returns the top k it selected. Without
-                the counts the last column reads as though it lost results. */}
+            {/* The funnel, stated: the early stages hold a hundred candidates and show eight. */}
             {stage.results.length === stage.total
               ? `${stage.total} kept`
               : `${stage.results.length} of ${stage.total}`}
@@ -281,10 +254,7 @@ function RankDelta({
 }) {
   if (!hasBaseline) return <span className="w-9 shrink-0" />;
 
-  // This stage's effect on the ranking is the finding the page exists to show,
-  // so it is the one thing drawn in colour. A chunk this stage introduced is
-  // marked new -- in the keyword column those are precisely the results vector
-  // search missed, and therefore the ones with the power to displace it.
+  // This stage's effect on the ranking is the finding, so it is the one thing drawn in colour.
   if (previous == null) {
     return (
       <span className="inline-flex w-9 shrink-0 justify-start font-mono text-[9px] uppercase tracking-wider text-keyword">

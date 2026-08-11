@@ -4,15 +4,7 @@ import { useEffect, useState } from "react";
 
 import { fetchStartups } from "@/lib/api";
 
-/**
- * The arrival screen. This is the whole first impression now that there is no
- * landing page, so it has to answer three questions before the visitor types
- * anything: what this is, what it knows about, and what to ask.
- *
- * The last example is deliberately outside the corpus. The system abstained on
- * all ten unanswerable questions in the eval set, and one click showing that is
- * worth more than a sentence claiming it.
- */
+/** The arrival screen: what this is, what it knows, and what to ask. The last example is out of corpus. */
 
 const EXAMPLES = [
   { q: "Which Indian startup builds electric scooters?", note: "direct lookup" },
@@ -31,8 +23,7 @@ const EXAMPLES = [
 ];
 
 export function EmptyState({ onPick }: { onPick: (q: string) => void }) {
-  // Counted from the corpus rather than written into the copy: the number
-  // changes on every ingest, and the hardcoded 111 was already wrong.
+  // Counted from the corpus, not written into the copy: the hardcoded 111 was already wrong.
   const [count, setCount] = useState<number | null>(null);
   useEffect(() => {
     fetchStartups({ limit: 1 })

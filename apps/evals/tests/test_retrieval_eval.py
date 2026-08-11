@@ -85,8 +85,7 @@ def test_recall_gives_partial_credit_for_multi_entity_questions():
 
 
 def test_unanswerable_items_are_excluded_from_retrieval_metrics():
-    # No document can be "correct" for a question the corpus cannot answer, so
-    # scoring it would just dilute the retrieval numbers.
+    # Nothing can be correct for a question the corpus cannot answer, so scoring it would dilute.
     items = [
         item("q", ["paytm"]),
         item("unanswerable", [], category="unanswerable"),

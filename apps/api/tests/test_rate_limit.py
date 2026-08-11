@@ -144,10 +144,7 @@ def test_client_ip_handles_unknown_peer():
     assert client_ip(None, peer=None, trusted_hops=0) == "unknown"
 
 
-# --- Client identity behind the Next.js proxy -------------------------------
-# Browser traffic reaches this API through the web app's server-side proxy, so
-# every request arrives from the same handful of hosting egress addresses. Keyed
-# on those, one visitor's traffic would exhaust the budget for everyone.
+# --- Client identity behind the Next.js proxy ---
 
 
 def test_uses_proxy_supplied_ip_when_the_shared_secret_matches():
@@ -179,8 +176,7 @@ def test_ignores_proxy_supplied_ip_when_the_secret_is_wrong():
 
 
 def test_ignores_proxy_supplied_ip_when_no_secret_is_configured():
-    # Without a configured secret the header is attacker-controlled: anyone
-    # could send a random address per request and never hit a limit.
+    # Without a configured secret the header is attacker-controlled and limits nothing.
     assert (
         resolve_client(
             proxy_client_ip="203.0.113.7",

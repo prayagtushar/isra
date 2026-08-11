@@ -18,18 +18,7 @@ from src.schema import Startup
 _DEFAULT_CACHE_PATH = Path("data/cache/startups.jsonl")
 
 def cache_path() -> Path:
-    """Where the scraped corpus is cached between runs.
-
-    Read at call time, and overridable with ISRA_INGEST_CACHE, so a test can be
-    pointed at a temporary file. It matters more than it looks: the path is
-    relative to the working directory, and both pytest and `bun run ingest` run
-    from apps/ingest -- so a test that exercised the cache wrote the same file a
-    real ingest would later read, and a run without --no-cache would load two
-    fixture companies and upsert them over the live corpus. That happened.
-
-    tests/conftest.py redirects this for every test rather than per test, so a
-    test added later cannot reintroduce it by forgetting.
-    """
+    """Where the scraped corpus is cached. ISRA_INGEST_CACHE redirects it so tests cannot hit it."""
     override = os.environ.get("ISRA_INGEST_CACHE")
     return Path(override) if override else _DEFAULT_CACHE_PATH
 
@@ -60,12 +49,7 @@ def _emit(progress: bool, event: dict) -> None:
         print(json.dumps(event), flush=True)
 
 def _scrape_all(limit: int | None) -> tuple[List[Startup], List[str]]:
-    """Scrape every source and concatenate (dedup happens later via merge).
-
-    Returns the records and the names of any sources that failed. One source
-    going down should not abort the run -- but the caller has to know, because a
-    partial scrape must not be cached as if it were the whole corpus.
-    """
+    """Scrape every source, returning the records and the names of any that failed."""
     scraped: List[Startup] = []
     failed: List[str] = []
 
@@ -114,22 +98,13 @@ def run_ingest(
     if not startup_cache:
         scraped, failed = _scrape_all(limit)
         if not scraped:
-            # Deliberately not falling back to sample_startups(). That fallback
-            # put four hand-written records into the live corpus -- Paytm,
-            # Zomato, Ola Electric, PharmEasy, with company homepages as their
-            # sources -- where they sat indistinguishable from scraped ones
-            # while the README said the corpus came from Wikipedia and Y
-            # Combinator. Loading nothing is recoverable and obvious; fabricated
-            # rows are neither. The fixtures remain in sample_data for tests.
+            # No sample_startups() fallback: fabricated rows once reached the live corpus.
             raise RuntimeError(
                 "every source failed; refusing to seed the corpus with sample data"
             )
         startup_cache = merge_startups(scraped)   # dedupe across sources by normalized_name
         if failed:
-            # Caching a partial scrape makes the gap permanent: the next run
-            # loads the short corpus and never retries the source that failed.
-            # A truncated Y Combinator download already produced a 58-record
-            # corpus this way, where a full run gives 107.
+            # Caching a partial scrape makes the gap permanent; the next run never retries the source.
             print(
                 f"not caching: {', '.join(failed)} failed, so this corpus is "
                 f"incomplete ({len(startup_cache)} records)"
@@ -145,8 +120,7 @@ def run_ingest(
     chunks = []
     for s in startup_cache:
         for c in chunk_fn(s.description, str(s.source_url), s.normalized_name):
-            # YC-style descriptions are first-person and never name the
-            # company, so name queries would miss both FTS and the embedding.
+            # YC descriptions are first-person and never name the company, so name queries would miss.
             if s.name.lower() not in c.text.lower():
                 c = replace(c, text=f"{s.name}: {c.text}")
             chunks.append(c)

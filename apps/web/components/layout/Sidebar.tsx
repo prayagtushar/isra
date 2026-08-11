@@ -20,12 +20,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { mode, topK, setMode, setTopK, showRetrievalTrace, setShowRetrievalTrace } = useSettings();
   const active = activeNav(pathname);
 
-  // Only the pages that retrieve get the retrieval controls. /startups browses
-  // the corpus and never calls the retriever, and /lab runs all three modes on
-  // purpose with its own Top K -- showing a mode selector on either implied a
-  // setting that changed nothing, next to a Top K that was not the one in use.
-  // Matched on the path rather than activeNav, which maps chat to "/" and so
-  // returns nothing for "/chat".
+  // Only pages that retrieve get the controls. Matched on path, since activeNav maps chat to "/".
   const showRetrievalControls =
     pathname === "/" || pathname.startsWith("/chat") || pathname.startsWith("/search");
 

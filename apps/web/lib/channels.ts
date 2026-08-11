@@ -1,11 +1,7 @@
 import type { CSSProperties } from "react";
 import type { RetrievalMode, TraceStage } from "@/lib/types";
 
-/**
- * Colour is load-bearing here: each retrieval channel owns a hue, so a result's
- * bar tells you which search produced it without reading a label. Fusion is the
- * only blended case, because RRF genuinely is the two lists combined.
- */
+/** Each retrieval channel owns a hue, so a bar says which search produced a result. */
 export type Channel = "vector" | "keyword" | "fusion" | "rerank";
 
 export const CHANNEL_LABELS: Record<Channel, string> = {
@@ -22,14 +18,7 @@ export const CHANNEL_HINTS: Record<Channel, string> = {
   rerank: "Cross-encoder scoring of the fused list",
 };
 
-/**
- * Inline style that paints a bar or dot for the channel.
- *
- * Longhand `backgroundColor` on purpose: React serialises the `background`
- * shorthand differently on the server and the client, which trips a hydration
- * mismatch that React explicitly does not patch up — the element ends up with
- * no background at all.
- */
+/** Longhand backgroundColor: the `background` shorthand hydrates differently and drops the colour. */
 export function channelStyle(channel: Channel): CSSProperties {
   return { backgroundColor: `var(--${channel})` };
 }

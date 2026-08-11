@@ -3,13 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useRetrievalStages } from "./useRetrievalStages";
 
-/**
- * The hook's whole promise is that a stage shows up the moment the server
- * finishes it. So these tests hold the stream open and assert what the caller
- * can see part-way through -- a test that only checked the final array would
- * pass just as happily on an implementation that buffered everything and
- * revealed it at the end, which is the thing this replaced.
- */
+/** These hold the stream open and assert what is visible part-way through, not just the final array. */
 
 function stageEvent(name: string, elapsed: number, total = 100) {
   return `data: ${JSON.stringify({
@@ -93,8 +87,7 @@ describe("useRetrievalStages", () => {
   });
 
   it("keeps the server's order rather than sorting", async () => {
-    // Whatever order the server reports is the order the pipeline ran in; the
-    // hook is not entitled to an opinion about it.
+    // Whatever order the server reports is the order the pipeline ran in.
     const { body, push, close } = controllableStream();
     mockFetch({ body });
 

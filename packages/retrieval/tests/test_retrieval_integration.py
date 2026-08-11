@@ -93,8 +93,7 @@ def test_keyword_search_returns_chunk(conn: Connection, seeded_chunk: Chunk):
 
 @pytest.mark.skipif(not _can_connect(), reason="Postgres not available")
 def test_keyword_search_long_query_returns_partial_matches(conn: Connection):
-    # Long natural-language queries should match chunks that contain *some*
-    # relevant terms, not require every term to appear in a single chunk.
+    # Long queries should match chunks with some relevant terms, not require all of them.
     startup_id = conn.execute(
         """
         INSERT INTO startups (normalized_name, source_url, name, description)

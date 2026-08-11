@@ -44,8 +44,7 @@ def _score_item(item: GoldenItem, chunks: Sequence) -> _ItemScore:
     names = [c.startup_name for c in chunks]
     found = matched_expected(item, names)
     recall = len(found) / len(item.expected)
-    # "all" questions only count as a hit once every expected entity is present;
-    # "any" questions need just one.
+    # "all" needs every expected entity present; "any" needs one.
     hit = 1.0 if (recall == 1.0 if item.match == "all" else bool(found)) else 0.0
     return _ItemScore(
         category=item.category,
@@ -73,8 +72,7 @@ def evaluate_modes(
     top_k: int = 5,
     retrieve: Callable = _default_retrieve,
 ) -> list[ModeResult]:
-    # Unanswerable items have no correct document to retrieve; they are scored
-    # on abstention during generation instead.
+    # Unanswerable items have nothing correct to retrieve; they are scored on abstention.
     answerable = [i for i in items if i.answerable]
 
     results: list[ModeResult] = []

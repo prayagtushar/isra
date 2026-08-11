@@ -1,15 +1,7 @@
 import { NextRequest } from "next/server";
 import { API_URL } from "./env";
 
-/**
- * Headers that let the API rate-limit the real visitor.
- *
- * Every browser request reaches the API through this server-side proxy, so the
- * API only ever sees the hosting platform's egress address. Without forwarding
- * the caller, one visitor would spend the budget for everyone. The shared
- * secret is what makes the forwarded address trustworthy — the API ignores it
- * otherwise, since anyone could claim any address.
- */
+/** Forwards the real visitor so the API can rate-limit them, not the hosting egress address. */
 export function clientHeaders(req?: NextRequest): Record<string, string> {
   if (!req) return {};
 

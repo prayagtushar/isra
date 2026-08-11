@@ -1,5 +1,4 @@
-# Build context lives at the repo root. Keep it lean — only the uv workspace
-# Python packages are needed to build the API image.
+# The build context is the repo root, so keep it to the uv workspace packages.
 
 # VCS / tooling
 .git

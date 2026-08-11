@@ -1,9 +1,4 @@
-"""The streaming pipeline: order, timing and the candidate counts.
-
-The point of retrieve_stages is that a caller can show each stage as it lands, so
-what matters is that stages are yielded in pipeline order, that the expensive one
-is yielded last, and that nothing is produced after a consumer stops reading.
-"""
+"""The streaming pipeline: stage order, timing, and that nothing runs after a consumer stops."""
 
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -17,11 +12,7 @@ from isra_retrieval.pipeline import TRACE_STAGE_LIMIT, retrieve_stages
 
 @pytest.fixture(autouse=True)
 def no_database():
-    """Stub the connection the pipeline opens.
-
-    Without this the tests run against whatever DATABASE_URL is in the
-    environment, which load_dotenv() makes the deployed database.
-    """
+    """Stub the connection the pipeline opens, which load_dotenv() makes the deployed database."""
 
     @contextmanager
     def _fake_conn():
@@ -77,8 +68,7 @@ def test_hybrid_mode_stops_before_the_reranker():
 
 
 def test_the_reranker_does_not_run_until_its_stage_is_requested():
-    """The reason for streaming: the cross-encoder is most of the wall clock, and
-    a consumer that has only pulled three stages must not have paid for it yet."""
+    """The reason for streaming: pulling three stages must not have paid for the fourth."""
     with _patched([_chunk(1)], [_chunk(2)], [_chunk(1)], [_chunk(1)]) as mock_rerank:
         stages = retrieve_stages("q", mode="hybrid+rerank")
         for _ in range(3):
@@ -90,8 +80,7 @@ def test_the_reranker_does_not_run_until_its_stage_is_requested():
 
 
 def test_a_consumer_that_stops_early_stops_the_pipeline():
-    """A closed generator must not go on to run the reranker for a client that
-    has disconnected."""
+    """A closed generator must not go on to rerank for a client that has disconnected."""
     with _patched([_chunk(1)], [_chunk(2)], [_chunk(1)], [_chunk(1)]) as mock_rerank:
         stages = retrieve_stages("q", mode="hybrid+rerank")
         next(stages)
@@ -101,9 +90,7 @@ def test_a_consumer_that_stops_early_stops_the_pipeline():
 
 
 def test_each_stage_reports_how_many_candidates_it_produced():
-    """results is truncated for display, so without the total the funnel reads
-    backwards: the last column looks like it lost results rather than selected
-    them."""
+    """results is truncated for display, so without the total the funnel reads backwards."""
     vector = [_chunk(i) for i in range(50)]
     keyword = [_chunk(i) for i in range(12)]
     fused = [_chunk(i) for i in range(50)]

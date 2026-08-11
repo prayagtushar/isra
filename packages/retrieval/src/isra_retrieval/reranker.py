@@ -15,8 +15,7 @@ def rerank(query: str, chunks: List[Chunk], top_k: int = 5, rerank_top_k: int = 
     if not chunks:
         return []
 
-    # Cross-encoding every fused chunk is too slow on low-CPU hosts. Score a
-    # smaller top-N subset and return the best top_k from it.
+    # Cross-encoding every fused chunk is too slow on low-CPU hosts, so score a top-N subset.
     chunks_to_score = chunks[:rerank_top_k]
     pairs = [[query, c.text] for c in chunks_to_score]
 

@@ -71,8 +71,7 @@ def test_allowed_responses_advertise_remaining_budget(strict_limiter, client):
 
 
 def test_health_is_not_rate_limited(strict_limiter, client):
-    # Cloud Run's liveness probe would otherwise trip the limit and take the
-    # instance down.
+    # Cloud Run's liveness probe would otherwise trip the limit and take the instance down.
     with patch("src.main.get_conn") as mock_get_conn:
         mock_conn = MagicMock()
         mock_get_conn.return_value.__enter__ = MagicMock(return_value=mock_conn)

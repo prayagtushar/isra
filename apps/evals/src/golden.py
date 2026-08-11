@@ -12,12 +12,10 @@ _NON_ALNUM = re.compile(r"[^a-z0-9]")
 @dataclass(frozen=True)
 class GoldenItem:
     question: str
-    # Startup identifiers that count as correct. Empty means the corpus cannot
-    # answer the question at all — the right behaviour is to abstain.
+    # Startup ids that count as correct. Empty means the corpus cannot answer it at all.
     expected: tuple[str, ...] = field(default=())
     category: str = "direct"
-    # "any": retrieving one acceptable answer is a hit (a question with several
-    # equally valid answers). "all": every entity must be retrieved (multi-hop).
+    # "any": one acceptable answer is a hit. "all": every entity must be retrieved (multi-hop).
     match: str = "any"
 
     @property

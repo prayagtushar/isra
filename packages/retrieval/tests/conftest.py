@@ -7,13 +7,7 @@ from tests.dsn import resolve_test_dsn
 
 @pytest.fixture(scope="session", autouse=True)
 def bind_test_database():
-    """Force every connection made during tests onto the test database.
-
-    ``isra_retrieval.db`` resolves its DSN from the environment at call time, so
-    overwriting these here redirects the code under test (which calls
-    ``get_conn()`` internally) away from the deployed database that
-    ``load_dotenv()`` put in ``os.environ``.
-    """
+    """Force every connection made during tests onto the test database, not the deployed one."""
     dsn = resolve_test_dsn()
     previous = {
         key: os.environ.get(key) for key in ("DATABASE_URL", "ISRA_DATABASE_URL")

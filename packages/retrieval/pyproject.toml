@@ -5,8 +5,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pgvector",
     "sentence-transformers",
-    # torch is declared directly (not just via sentence-transformers) so the
-    # root tool.uv.sources pin routes it to the CPU wheel index on Linux.
+    # Declared directly so the root tool.uv.sources pin routes it to the CPU wheels.
     "torch",
     "psycopg[binary]",
     "numpy",

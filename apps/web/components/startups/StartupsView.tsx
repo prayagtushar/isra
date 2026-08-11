@@ -10,13 +10,10 @@ import { StartupDrawer } from "./StartupDrawer";
 import { cn } from "@/lib/cn";
 import type { Startup } from "@/lib/types";
 
-// The whole corpus, which is the endpoint's ceiling. It was 100, which silently
-// hid every company past the hundredth and reported the page size as the total.
+// The whole corpus. It was 100, which hid every company past the hundredth.
 const CORPUS_LIMIT = 200;
 
-// Sectors shown before the filter is asked to expand. The corpus carries about
-// seventy, more than half of them on a single company, so listing all of them
-// puts a wall of chips above the results and buries the ones worth clicking.
+// Sectors shown before the filter expands; the corpus carries about seventy.
 const VISIBLE_SECTORS = 12;
 
 export function StartupsView() {
@@ -39,9 +36,7 @@ export function StartupsView() {
 
   useEffect(load, []);
 
-  // Ordered by how many companies each sector holds, so the chips that filter
-  // to something substantial come first. Alphabetical order put "Adware", which
-  // matches one company, ahead of "Financial Technology", which matches twenty.
+  // Ordered by how many companies each sector holds, so the useful chips come first.
   const sectors = useMemo(() => {
     const counts = new Map<string, number>();
     for (const startup of all) {
@@ -52,8 +47,7 @@ export function StartupsView() {
       .map(([name, count]) => ({ name, count }));
   }, [all]);
 
-  // A selected sector stays visible even when collapsed, so the active filter is
-  // never a chip the reader cannot see.
+  // A selected sector stays visible when collapsed, so the active filter is never hidden.
   const shownSectors = useMemo(() => {
     if (allSectors) return sectors;
     const head = sectors.slice(0, VISIBLE_SECTORS);

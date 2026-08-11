@@ -62,8 +62,7 @@ downloads/
 eggs/
 lib/
 lib64/
-# The lib/ rule above targets Python build output; don't let it swallow the
-# web app's source directory.
+# The lib/ rule above is for Python build output, not the web app's source.
 !apps/web/lib/
 parts/
 sdist/

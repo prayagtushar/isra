@@ -64,15 +64,7 @@ def test_run_ingest_no_cache(
 def test_run_ingest_refuses_to_seed_the_corpus_with_sample_data(
     mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
 ):
-    """When every source fails the run must stop, not substitute fixtures.
-
-    The old fallback called sample_startups(), and four of those hand-written
-    records reached the live corpus -- Paytm, Zomato, Ola Electric, PharmEasy,
-    carrying company homepages as their sources -- where nothing distinguished
-    them from scraped rows while the README described the corpus as Wikipedia
-    and Y Combinator. Loading nothing is obvious and recoverable; fabricated
-    rows are neither.
-    """
+    """When every source fails the run must stop, not substitute fixtures."""
     mock_scrape.return_value = []
     mock_yc.return_value = []
     mock_seed.return_value = []
@@ -84,10 +76,7 @@ def test_run_ingest_refuses_to_seed_the_corpus_with_sample_data(
     mock_load.assert_not_called()
 
 def test_cache_path_is_redirected_away_from_the_real_one():
-    """The isolation itself, asserted rather than assumed. Without it a test's
-    fixture companies land in the file a real ingest reads, and get upserted
-    over the live corpus -- which is how two production records came to say
-    "We deliver groceries in 10 minutes through dark stores."."""
+    """The isolation itself, asserted rather than assumed."""
     resolved = cache_path()
     assert resolved != Path("data/cache/startups.jsonl")
     assert "startups.jsonl" in resolved.name
@@ -102,9 +91,7 @@ def test_cache_path_is_redirected_away_from_the_real_one():
 def test_run_ingest_does_not_cache_a_partial_scrape(
     mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
 ):
-    """One source failing must not be written to the cache, or the next run
-    loads the short corpus and never retries it. A truncated Y Combinator
-    download produced 58 records this way where a full run gives 107."""
+    """A cached partial scrape makes the gap permanent; the next run never retries the source."""
     from src.schema import Startup
 
     s = Startup(
@@ -183,10 +170,7 @@ def test_run_ingest_cache_persists(
 def test_run_ingest_prefixes_chunks_with_startup_name(
     mock_connect, mock_load, mock_embed, mock_merge, mock_seed, mock_scrape, mock_yc
 ):
-    # YC-style descriptions are first-person ("We deliver groceries...") and
-    # never mention the company, so name queries miss both FTS and the
-    # embedding. Every chunk must carry the display name; chunks that already
-    # mention it are left alone.
+    # YC descriptions never name the company, so every chunk must carry the display name.
     from src.schema import Startup
 
     zepto = Startup(

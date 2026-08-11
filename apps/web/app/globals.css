@@ -2,25 +2,7 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---------------------------------------------------------------------------
-   Palette — parchment and ink, with one hue per retrieval channel.
-
-   The ground is a warm off-white rather than white, and the dark theme is a
-   warm near-black rather than a neutral one, so neither reads as a black-and-
-   white terminal. Nothing here uses a gradient.
-
-   Colour is load-bearing, not decoration: each stage of the pipeline owns a hue,
-   so a bar tells you which search produced a result without reading a label.
-   The two inputs differ in kind, so they differ in temperature — a cool teal for
-   similarity computed from an embedding, a warm ochre for a literal word match.
-   Their combination takes the terracotta between them, and the cross-encoder's
-   final say is drawn in ink, the highest-contrast tone on the page.
-
-     teal      vector search    similarity in embedding space
-     ochre     keyword search   Postgres full-text, literal matches
-     terracotta  RRF fusion     the two lists reconciled
-     ink       BGE rerank       the ranking that is actually served
---------------------------------------------------------------------------- */
+/* Palette: parchment and ink, one hue per channel — teal vector, ochre keyword, terracotta fusion, ink rerank. */
 
 :root {
   --base: #f6f3ec;
@@ -60,8 +42,7 @@
   --accent-soft: rgb(224 122 82 / 0.15);
   --focus: #f4f1e6;
 
-  /* Lifted off the dark ground; ink inverts to parchment so the served ranking
-     stays the highest-contrast row either way. */
+  /* Lifted off the dark ground; ink inverts to parchment so the served ranking stays highest-contrast. */
   --vector: #3fa8a0;
   --keyword: #d8a441;
   --fusion: #e07a52;
@@ -118,9 +99,7 @@
     -webkit-text-size-adjust: 100%;
   }
 
-  /* Mono is the default face. Scores, names, modes and IDs are the bulk of
-     this interface and they line up in a monospace; prose is the exception and
-     opts in via .prose-human. */
+  /* Mono is the default face; prose is the exception and opts in via .prose-human. */
   body {
     background-color: var(--base);
     color: var(--ink);
@@ -169,8 +148,7 @@
   }
 }
 
-/* Headings. Mono is already the body face, so the display style is about
-   weight and tightened tracking rather than a different family. */
+/* Headings: mono is already the body face, so this is weight and tracking, not a new family. */
 
 .display-sm {
   font-family: var(--font-mono);

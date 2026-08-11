@@ -3,17 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { StartupsView } from "./StartupsView";
 
-/**
- * The browser had two defects worth pinning: it fetched a hundred rows and
- * printed that as the total, and it rendered every sector as a chip -- about
- * seventy for a corpus of a hundred-odd companies, more than half of them
- * matching one company -- in alphabetical order, so the chips that filter to
- * something substantial were buried below a wall.
- */
+/** Two defects worth pinning: a hundred rows reported as the total, and seventy chips in alphabetical order. */
 
-// The detail drawer is always mounted and reaches for the router and the
-// conversation store to offer "ask about this company". Neither exists in jsdom,
-// and neither is what these tests are about.
+// The detail drawer reaches for the router and conversation store, neither of which exists in jsdom.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: () => {} }),
   usePathname: () => "/startups",
@@ -105,8 +97,6 @@ describe("StartupsView", () => {
     await waitFor(() => expect(screen.getByText(/17 startups/i)).toBeInTheDocument());
 
     // Chips are uppercased in CSS, so the text nodes keep the canonical case.
-    // Alphabetical put "Adware" (one company) ahead of "Financial Technology"
-    // (three). Counts are shown so the ordering is checkable by a reader too.
     const chips = screen.getAllByRole("button").map((b) => b.textContent ?? "");
     const financial = chips.findIndex((t) => t.includes("Financial Technology"));
     const adware = chips.findIndex((t) => t.includes("Adware"));
@@ -130,8 +120,7 @@ describe("StartupsView", () => {
   });
 
   it("keeps the selected sector visible even when the list is collapsed", async () => {
-    // Filtering by a chip that then disappears would leave the reader unable to
-    // see or clear the filter that is in force.
+    // Filtering by a chip that then disappears leaves the reader unable to clear it.
     mockCorpus(corpus());
     await act(async () => {
       render(<StartupsView />);
@@ -141,8 +130,7 @@ describe("StartupsView", () => {
     await act(async () => {
       screen.getByText(/All 14 sectors/i).click();
     });
-    // Scoped to the filter row: the card for that company carries the same
-    // sector as a tag, so a bare text query matches twice.
+    // Scoped to the filter row: the company's card carries the same sector as a tag.
     const chip = () =>
       screen.getAllByRole("button").find((b) => /^Web3/.test(b.textContent ?? ""));
     const tailChip = chip();
@@ -155,8 +143,7 @@ describe("StartupsView", () => {
     });
 
     expect(chip()).toBeDefined();
-    // The count label is assembled from several text nodes, so match the
-    // element's whole text rather than a fragment of it.
+    // The count label is several text nodes, so match the element's whole text.
     expect(
       screen.getByText(
         (_content, el) =>
@@ -166,8 +153,7 @@ describe("StartupsView", () => {
   });
 
   it("falls back to the description for a company with no one-liner", async () => {
-    // Only Y Combinator records carry a one_liner, so more than half the grid
-    // rendered as a bare name and a valuation.
+    // Only YC records carry a one_liner, so more than half the grid was a bare name.
     mockCorpus([startup(1, "Zepto", ["Quick-Commerce"], { one_liner: null })]);
     await act(async () => {
       render(<StartupsView />);

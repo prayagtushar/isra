@@ -41,9 +41,7 @@ def test_build_startup_fallback_description():
     assert "Razorpay" in s.description
 
 def test_build_startup_spaces_an_ampersand_the_company_ran_together():
-    """Verbatim from the directory: "rewards&flexible benefits". Left alone it
-    shows up that way on the card, and full-text search indexes
-    "rewards&flexible" as a token no query will ever match."""
+    """Verbatim from the directory: "rewards&flexible benefits", which FTS would never match."""
     s = build_startup(
         _yc(
             one_liner="Employee engagement with rewards&flexible benefits",
@@ -78,21 +76,14 @@ def test_cross_source_merge_dedupes_by_name():
     assert "financial services" in m.description
     assert m.fundings == 7_500_000_000.0
 
-    # The two sources named one sector two ways -- Wikipedia "Financial
-    # technology", YC "Fintech". merge_startups unions sectors by string
-    # equality, so before normalization this record carried both and the
-    # /startups filter listed them as separate choices. One sector, one entry.
+    # The sources name one sector two ways, and merge_startups unions them by string equality.
     assert sorted(m.sectors) == ["Financial Technology", "Payments"]
 
-    # The citation has to point at the page the description came from. YC's
-    # description won on length, so YC must be the source.
+    # The citation has to point at the page the description came from.
     assert "ycombinator.com" in str(m.source_url)
 
 def test_merge_keeps_the_source_of_the_description_it_kept():
-    """Zepto shipped with Wikipedia's text above a Y Combinator link, because
-    the longest description won while source_url stayed with whichever record
-    was seen first. For a system that cites every answer, a citation pointing
-    at a page that does not contain the text is the worst kind of wrong."""
+    """Zepto shipped Wikipedia's text above a YC link. A citation must match the text it carries."""
     short = Startup(
         name="Zepto",
         normalized_name="Zepto",

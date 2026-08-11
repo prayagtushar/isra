@@ -139,9 +139,7 @@ def test_chat_sse_trace():
     assert events[0]["trace"]["stages"][0]["name"] == "vector"
 
 def test_ingest_env_sets_database_url_for_subprocess():
-    # In Cloud Run only ISRA_DATABASE_URL is set (via Secret Manager); the
-    # ingest subprocess reads plain DATABASE_URL, so the API must map it or
-    # web-triggered ingest dies with "DATABASE_URL is not set".
+    # Cloud Run sets only ISRA_DATABASE_URL, so the API has to map it for the subprocess.
     from src.main import _ingest_env
 
     with patch.dict("os.environ", {}, clear=True):
@@ -154,17 +152,7 @@ def test_ingest_env_sets_database_url_for_subprocess():
     assert "PYTHONPATH" in env
 
 def test_chat_sse_streams_with_langfuse_tracing_enabled():
-    """Regression: the Langfuse wrapper must not consume itself.
-
-    `chat()` rebinds `stream` to the wrapper generator, and the closure
-    resolves that name at call time. Iterating `stream` inside the wrapper
-    therefore made the generator iterate itself, raising
-    `RuntimeError: anext(): asynchronous generator is already running`
-    on the first `__anext__` and returning an empty 200 response.
-
-    This forces `_langfuse` on so the traced path is always exercised, even
-    when no Langfuse credentials are configured in the environment.
-    """
+    """Regression: the Langfuse wrapper rebinds `stream`, so it used to iterate itself and return empty."""
     chunk = _make_chunk(1, text="context", score=0.9)
 
     async def _fake_stream(*_args, **_kwargs):

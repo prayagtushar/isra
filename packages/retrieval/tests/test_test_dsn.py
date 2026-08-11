@@ -11,9 +11,7 @@ def test_falls_back_to_local_default():
 
 
 def test_never_inherits_the_deployed_database_url():
-    # db.py calls load_dotenv() at import time, which pushes the production DSN
-    # into os.environ. The integration tests write and delete rows, so picking
-    # that up would mutate the live database.
+    # load_dotenv() pushes the production DSN into os.environ, and these tests write rows.
     env = {
         "DATABASE_URL": "postgresql://prod@db.supabase.co:5432/postgres",
         "ISRA_DATABASE_URL": "postgresql://prod@db.supabase.co:5432/postgres",

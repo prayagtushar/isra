@@ -1,11 +1,4 @@
-"""Test-database binding for the API suite.
-
-``isra_retrieval.db`` calls ``load_dotenv()`` when imported, so the deployed
-connection string is in ``os.environ`` during a test run. These tests create
-users and password-reset rows — pointed at the deployed database they would
-write real records into production. Bind everything to a throwaway database
-instead, and skip when none is reachable.
-"""
+"""Bind the API suite to a throwaway database; load_dotenv() would otherwise supply the deployed one."""
 
 import os
 

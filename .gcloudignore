@@ -1,6 +1,4 @@
-# Controls what `gcloud builds submit` uploads as the build context.
-# Keep this in sync with .dockerignore — exclude everything the API image
-# build does not need, so the upload stays small.
+# What `gcloud builds submit` uploads. Keep in sync with .dockerignore.
 
 .git
 .gitignore

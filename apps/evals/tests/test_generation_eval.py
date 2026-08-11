@@ -96,8 +96,7 @@ def test_unanswerable_items_are_scored_on_abstention_only(monkeypatch):
     def retrieve(q, top_k=5, mode="hybrid+rerank"):
         return [FakeChunk()]
 
-    # A single judge call: the abstention grade. Faithfulness, relevancy and
-    # context precision are meaningless when there is no correct answer.
+    # One judge call, the abstention grade: the rest is meaningless with no correct answer.
     judge = ScriptedJudge([1.0])
 
     report = asyncio.run(

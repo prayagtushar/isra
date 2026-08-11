@@ -1,9 +1,4 @@
-"""The only remaining gate: /ingest writes to the database and runs the scraper.
-
-This replaces the hand-rolled account system. It is a shared key, not
-authentication — enough to stop a passer-by triggering a re-ingest, and honest
-about being nothing more than that.
-"""
+"""The only remaining gate: /ingest writes to the database and runs the scraper."""
 
 from unittest.mock import patch
 
@@ -15,8 +10,7 @@ from src.main import app
 
 @pytest.fixture
 def client():
-    # /ingest is rate limited to 3/hour, which this file would trip on its own.
-    # Swap in a permissive limiter so these tests measure the key, not the limit.
+    # /ingest is limited to 3/hour, which this file would trip on its own.
     from src.rate_limit import RateLimiter, Rule
 
     permissive = RateLimiter(default=Rule(limit=1000, window_seconds=60.0))
@@ -40,8 +34,7 @@ def test_ingest_is_refused_with_the_wrong_key(client):
 
 
 def test_ingest_is_refused_when_no_key_is_configured(client):
-    # An unset secret must not mean an open door — a deployment that forgot to
-    # set the variable would otherwise expose the one write endpoint.
+    # An unset secret must not mean an open door for the one write endpoint.
     with patch("src.main._ADMIN_KEY", None):
         assert _ingest(client, key="anything").status_code == 401
 

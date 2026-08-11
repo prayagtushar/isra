@@ -34,8 +34,7 @@ def _fixture():
 
 
 def test_coverage_denominator_excludes_inapplicable_items():
-    # Faithfulness is only attempted on the 2 answerable items, and abstention
-    # only on the 1 unanswerable one — coverage must not divide by all 3.
+    # Each metric is attempted on its own subset, so coverage must not divide by all three.
     _, _, gen = _fixture()
     assert gen.coverage("faithfulness") == (1, 2)
     assert gen.coverage("abstention") == (1, 1)

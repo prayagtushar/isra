@@ -43,9 +43,7 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2">
-        {/* The mode applies to /chat and /search. The lab runs the whole pipeline
-            and labels each stage itself, and /startups never retrieves, so on
-            those pages this chip names a setting with no effect here. */}
+        {/* The mode applies to /chat and /search; elsewhere it would name a setting with no effect. */}
         {showsMode && (
           <span className="hidden items-center gap-1.5 sm:flex">
             <span className="h-1.5 w-1.5 rounded-full bg-accent" />

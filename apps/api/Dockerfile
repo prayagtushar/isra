@@ -1,18 +1,8 @@
 # syntax=docker/dockerfile:1
 #
-# Production image for the ISRA FastAPI service (apps/api).
-#
-# Build from the REPO ROOT (the uv workspace root), not from apps/api:
-#   docker build -f apps/api/Dockerfile -t isra-api .
-#
-# The image bakes the BGE embedding + reranker models into the HuggingFace
-# cache so the first request does not pay a multi-hundred-MB download. torch is
-# CPU-only: the root pyproject pins it to the PyTorch CPU wheel index for Linux,
-# so no CUDA libraries are pulled into the image.
+# Build from the repo root, not apps/api:  docker build -f apps/api/Dockerfile -t isra-api .
 
-############################################
-# Builder: resolve deps + bake models
-############################################
+# Builder: resolve deps and bake the models in.
 FROM python:3.11-slim-bookworm AS builder
 
 # Pin uv to the version this repo's lockfile was produced with.
@@ -26,22 +16,16 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Copy the whole workspace (see .dockerignore for what is excluded) and sync
-# Install the api package (+ its workspace dep isra-retrieval) AND the ingest
-# package, so the /ingest endpoint's subprocess has its scraper deps
-# (beautifulsoup4, lxml). evals is not installed.
+# api plus ingest, because /ingest shells out to the scraper. evals is not installed.
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package isra-api --package isra-ingest
 
-# Pre-download the models used by retrieve(): embeddings for every mode and the
-# cross-encoder reranker for the default "hybrid+rerank" mode.
+# Pre-download the models so the first request does not pay for it.
 RUN mkdir -p /opt/hf && \
     .venv/bin/python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; SentenceTransformer('BAAI/bge-small-en-v1.5'); CrossEncoder('BAAI/bge-reranker-base')"
 
-############################################
-# Runtime
-############################################
+# Runtime.
 FROM python:3.11-slim-bookworm AS runtime
 
 # libgomp1 is required by the CPU torch wheels.

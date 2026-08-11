@@ -3,14 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LabView } from "./LabView";
 
-/**
- * What this page has to get right is the reading, not the fetching: which column
- * a stage lands in, what each result moved relative to the stage it is supposed
- * to improve on, and that a truncated list is not mistaken for a shrinking one.
- *
- * The settings store is stubbed rather than wrapped in a provider, because top_k
- * is incidental here and a real provider would make every test depend on it.
- */
+/** What matters here is the reading, not the fetching: which column, what moved, truncation vs loss. */
 vi.mock("@/lib/store/settings", () => ({
   useSettings: () => ({ topK: 5, setTopK: () => {} }),
 }));
@@ -126,8 +119,7 @@ describe("LabView", () => {
   });
 
   it("says 'kept' when a stage selected rather than truncated", async () => {
-    // The rerank column returns exactly what it chose, so "5 of 5" would read as
-    // though something had been cut.
+    // The rerank column returns what it chose, so "5 of 5" would read as though something was cut.
     const stream = stubStream();
     render(<LabView />);
     await runFirstExample();
@@ -143,8 +135,7 @@ describe("LabView", () => {
   });
 
   it("marks a result the keyword search found and vector search missed", async () => {
-    // Those are exactly the chunks with the power to displace a correct one in
-    // fusion, which is the project's least comfortable eval result.
+    // Exactly the chunks with the power to displace a correct one in fusion.
     const stream = stubStream();
     render(<LabView />);
     await runFirstExample();

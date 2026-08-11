@@ -1,19 +1,6 @@
 "use client";
 
-/**
- * Queries a visitor can click instead of inventing one.
- *
- * An empty box asks the reader to guess what a 107-company corpus knows, and
- * most will guess wrong and conclude the retrieval is bad. Worse on /lab, whose
- * whole point is that the three modes disagree -- on most queries they return
- * the same chunks in the same order, so an arbitrary query makes the comparison
- * look pointless.
- *
- * The captions come from the eval set rather than from guesswork: hybrid fusion
- * loses direct lookups (hit@5 1.000 -> 0.833) and the cross-encoder wins
- * multi-hop questions (0.500 -> 0.625). Picking one of each shows the finding
- * the README reports, on a query where it is visible.
- */
+/** Clickable queries, chosen from the eval set so the three modes visibly disagree. */
 
 export interface ExampleQuery {
   q: string;

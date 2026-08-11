@@ -15,11 +15,7 @@ USER_AGENT = "ISRA-Bot/0.1 {+https://github.com/prayagtushar/isra.git}"
 _LIST_URL = "https://en.wikipedia.org/wiki/List_of_unicorn_startup_companies"
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
-# Footnotes and the editorial markers Wikipedia renders inline. Only numeric
-# footnotes were stripped, so descriptions reached the corpus reading
-# "As of August 2024,[update] the company..." -- and that text is what gets
-# embedded and shown, not just stored. Enumerated rather than matched by shape,
-# so a bracket a company actually wrote survives.
+# Footnotes and editorial markers, enumerated so a bracket a company wrote survives.
 _CITATION = re.compile(
     r"\[\s*(?:\d+|[a-z]|note\s+\d+|update|citation needed|clarify|sic|"
     r"who\?|when\?|why\?|where\?|according to whom\?)\s*\]",
@@ -47,33 +43,14 @@ def _split_multi(value: str) -> list[str]:
     return [_clean(p) for p in parts if _clean(p)]
 
 def _list_cell(cell) -> list[str]:
-    """Read a cell that holds several values, however the page separates them.
-
-    Wikipedia writes multi-value cells three ways -- "a, b", "a<br>b", and a
-    <ul> of <li> -- and get_text() with no separator concatenates the last two
-    into one string. That is how the corpus ended up with a sector called
-    "Financial technologyPaymentsAdware" and a founder called
-    "Jyoti BansalBipul Sinha".
-
-    Inserting a comma at every markup boundary turns all three spellings into
-    the comma-separated case, which _split_multi already handles. Only cells
-    that are genuinely lists get this treatment: doing it to a scalar cell
-    would corrupt values that legitimately contain commas, such as a
-    headquarters address.
-
-    Citations are removed as markup, before the separators go in. A reference
-    renders as <sup>[1]</sup>, and separating every node first turns it into
-    "[, 1, ]" -- which the citation pattern no longer recognizes, so "1" and
-    "[" survive as sectors of their own.
-    """
+    """Read a multi-value cell however the page separates it: commas, <br>, or a <ul>."""
     cell = copy.copy(cell)
     for sup in cell.find_all("sup"):
         sup.decompose()
     return [value for value in _split_multi(cell.get_text(separator=", ")) if _has_letter(value)]
 
 def _has_letter(value: str) -> bool:
-    """Reject fragments left by markup, e.g. a stray bracket or footnote number.
-    A sector name contains a letter; punctuation and digits alone never do."""
+    """Reject markup fragments: a sector name has a letter, punctuation and digits alone do not."""
     return any(char.isalpha() for char in value)
 
 def _parse_valuation(value: str) -> float | None:
@@ -87,10 +64,7 @@ def _parse_valuation(value: str) -> float | None:
         return None
 
 def _link_matches_name(name: str, slug: str, title: str) -> bool:
-    """Guard against list rows whose link points at a different company's
-    article (e.g. "Krutrim" linked to /wiki/Ola_Electric). The link target is
-    trusted only if the company name and the article name overlap: one
-    contains the other, or they share a token of >= 3 characters."""
+    """Trust a row's link only if the company and article names overlap."""
     def norm(value: str) -> str:
         return re.sub(r"[^a-z0-9]", "", value.lower())
 
@@ -106,34 +80,7 @@ def _link_matches_name(name: str, slug: str, title: str) -> bool:
     return False
 
 def resolve_slug(name: str, query_json: dict) -> str | None:
-    """Find the article for a company whose list row carried no usable link.
-
-    Roughly a third of the rows link nowhere useful -- no link at all, or one
-    _link_matches_name rejected as pointing at a different company -- and
-    without an article those records fall back to a stub.
-
-    This reads a title query (action=query&titles=...&redirects=1), not a
-    full-text search. Full-text search was tried first and is unusable here: it
-    ranks by relevance rather than identity, so "Razorpay India company"
-    returns Cred, the Central Bank of India, and an article about fintech in
-    India, with no mention of Razorpay at all. Picking from that list means
-    filing one company's history under another company's name.
-
-    A title query answers the only question worth asking -- does an article with
-    this name exist -- and resolves redirects, which is what catches companies
-    renamed since the list was written.
-
-    Order matters, and it is the whole subtlety here. A matching title wins over
-    a redirect, because a company name that collides with an ordinary word
-    redirects somewhere useless: "Zepto" redirects to "Metric prefix", the SI
-    unit, while the grocery company lives at "Zepto (company)". Only when no
-    title matches is the redirect trusted -- and then it is trusted even if the
-    target looks nothing like the name, because at that point an editor
-    asserting the two names are one subject is the only evidence available, and
-    it is how "Zomato" correctly reaches "Eternal Limited".
-
-    Anything else returns None and the record keeps its stub.
-    """
+    """Find the article for a company whose row had no usable link. A matching title beats a redirect."""
     if not name.strip():
         return None
 
@@ -143,15 +90,11 @@ def resolve_slug(name: str, query_json: dict) -> str | None:
     for page in (query.get("pages") or {}).values():
         if "missing" in page:
             continue
-        # A disambiguation page carries the company's exact name and no content
-        # about it. "Apna" reached the corpus as "Apna or APNA can mean:" with no
-        # sector, because the title matched. Wikipedia flags these itself, which
-        # beats guessing from the text.
+        # Wikipedia flags disambiguation pages itself, which beats guessing from the text.
         if "disambiguation" in (page.get("pageprops") or {}):
             continue
         title = page.get("title") or ""
-        # Article titles disambiguate with a parenthetical -- "Zepto (company)"
-        # -- which should not count against the match.
+        # Titles disambiguate with a parenthetical, which should not count against the match.
         bare = re.sub(r"\s*\([^)]*\)\s*$", "", title)
         candidate = re.sub(r"[^a-z0-9]", "", bare.lower())
         if candidate and (target in candidate or candidate in target):
@@ -164,12 +107,7 @@ def resolve_slug(name: str, query_json: dict) -> str | None:
     return None
 
 def parse_unicorn_table(html: str) -> list[UnicornRecord]:
-    """Extract Indian unicorn rows from the Wikipedia page.
-
-    The page has several `wikitable`s (count-over-time, by-country, the main
-    per-company list, and an exited-unicorns list). We scan every table and
-    keep rows shaped like the per-company list (>= 6 cells, country in col 5).
-    """
+    """Extract unicorn rows, keeping only tables shaped like the per-company list."""
     soup = BeautifulSoup(html, "lxml")
     records: list[UnicornRecord] = []
 
@@ -223,11 +161,7 @@ def parse_infobox(html: str) -> dict:
         if key == "industry":
             info["industry"] = _list_cell(data)
         elif key == "type of site" and "industry" not in info:
-            # Internet companies get {{infobox website}}, which has no Industry
-            # row at all -- so Zomato, one of the best-known companies in the
-            # corpus, carried no sector and could not be reached from the
-            # /startups filter. "Type of site" is that template's equivalent
-            # ("Online food ordering"). Industry still wins when both appear.
+            # {{infobox website}} has no Industry row; "type of site" is its equivalent. Industry still wins.
             info["industry"] = _list_cell(data)
         elif key == "founded":
             match = re.search(r"\b(\d{4})\b", value)
@@ -236,8 +170,7 @@ def parse_infobox(html: str) -> dict:
         elif key in ("founder", "founders"):
             info["founders"] = _list_cell(data)
         elif key == "headquarters":
-            # Scalar, and commonly "City, State, Country" -- read without the
-            # inserted separators so the address survives intact.
+            # Scalar, and often "City, State, Country", so read it without the inserted separators.
             info["headquarters"] = value
 
     return info
@@ -255,18 +188,7 @@ def _extract_lead(html: str) -> str:
     return ""
 
 def _stub_description(record: UnicornRecord, info: dict) -> str:
-    """Describe a company with only what its list row and infobox knew.
-
-    The previous stub ended every record with the same sentence -- "It is
-    featured on Wikipedia's list of unicorn startup companies." Repeated across
-    32 of 111 records, that sentence became a substantial fraction of the
-    embedded text and was identical in all of them, so it pulled those chunks
-    together in vector space while telling a reader nothing. Retrieval for
-    "fintech unicorn payments" returned three of them, indistinguishable.
-
-    What the row does know -- valuation, founders, sector, year, headquarters --
-    is specific per company, and answers questions the corpus is actually asked.
-    """
+    """Describe a company from what its row and infobox knew, with no filler shared between stubs."""
     # Canonical spellings, so the prose matches the sector shown beside it.
     sectors = normalize_sectors(record.sectors or [])
     sentences = []
@@ -280,13 +202,7 @@ def _stub_description(record: UnicornRecord, info: dict) -> str:
     sentences.append(opening + ".")
 
     if record.valuation:
-        # The figure only. An earlier version appended "which places it among
-        # India's unicorns", which is filler twice over: every company in this
-        # corpus is an Indian unicorn, so the clause distinguishes nothing, and it
-        # was byte-identical across 28 of them -- about a quarter of each 139-char
-        # stub. That is the same defect as the boilerplate it replaced, and the
-        # measured cost was real: vector MRR fell from 0.832 to 0.756 and context
-        # precision from 0.385 to 0.313 over the ingest that introduced it.
+        # The figure only: filler repeated across stubs cost measurable retrieval quality.
         sentences.append(f"It is valued at about US${record.valuation:g} billion.")
 
     founders = [f for f in (record.founders or info.get("founders") or []) if f != "Unknown"]
@@ -335,15 +251,10 @@ def _fetch(url: str) -> str:
         return r.text
 
 def _lookup_slug(name: str) -> str | None:
-    """Ask Wikipedia whether an article exists under this name. Best effort.
-
-    Both spellings are queried in one request: the plain name, and the
-    "(company)" form Wikipedia uses when a name is ambiguous.
-    """
+    """Ask Wikipedia whether an article exists, querying the plain and "(company)" spellings."""
     params = {
         "action": "query",
-        # pageprops carries the disambiguation flag, which is how a page holding
-        # the company's name but none of its content is recognized.
+        # pageprops carries the disambiguation flag.
         "prop": "info|pageprops",
         "titles": f"{name}|{name} (company)",
         "redirects": "1",
@@ -380,12 +291,7 @@ def scrape_wikipedia(startup_slug: str, startup_name: str) -> Startup:
     )
 
 def scrape_startups(limit: int | None = None, fetch_articles: bool = True) -> list[Startup]:
-    """Scrape Indian unicorns from the Wikipedia list (richest valuations first).
-
-    Fetches the list page once, parses the per-company table, dedupes by name,
-    and (optionally) fetches each company's article for a real description.
-    Article fetches are best-effort: failures fall back to a generated blurb.
-    """
+    """Scrape Indian unicorns from the Wikipedia list, richest valuations first."""
     records = parse_unicorn_table(_fetch(_LIST_URL))
 
     seen: set[str] = set()
@@ -402,9 +308,7 @@ def scrape_startups(limit: int | None = None, fetch_articles: bool = True) -> li
     startups: list[Startup] = []
     stubbed: list[str] = []
     for record in unique:
-        # A row that links nowhere useful used to go straight to a stub. Look
-        # the title up first; resolve_slug rejects anything that does not name
-        # this company, so it cannot enrich a record from a different one.
+        # Look the title up before falling back to a stub; resolve_slug rejects a mismatch.
         slug = record.slug
         if fetch_articles and not slug:
             slug = _lookup_slug(record.name)
@@ -426,17 +330,12 @@ def scrape_startups(limit: int | None = None, fetch_articles: bool = True) -> li
             print(f"skip {record.name}: {exc}")
 
     if stubbed:
-        # Worth printing rather than swallowing: every name here is a company
-        # whose only text is a generated stub, which is the ceiling on what
-        # retrieval can do for it.
+        # Worth printing: each of these has only a generated stub to retrieve on.
         print(f"no article found for {len(stubbed)}/{len(unique)}: {', '.join(stubbed)}")
 
     return startups
 
-# Well-known Indian companies that the unicorn list does not reliably yield --
-# some have exited unicorn status, some sit in a table shape the parser skips,
-# some are named differently there. Without this they were missing from the
-# corpus entirely, and hand-written records stood in for four of them.
+# Well-known companies the unicorn list does not reliably yield.
 NOTABLE_NAMES = [
     "Ola Electric",
     "Paytm",
@@ -449,19 +348,7 @@ NOTABLE_NAMES = [
 ]
 
 def seed_details() -> list[Startup]:
-    """Scrape the well-known companies the unicorn list misses.
-
-    Names, not slugs: the article title is resolved at run time, so a company
-    renamed on Wikipedia is followed rather than 404ing on a slug frozen into
-    this file.
-
-    A name with no article is skipped rather than stubbed. These records exist
-    only to add companies the main scrape missed, and a stub adds a name with
-    nothing to retrieve -- if the company is on the unicorn list, that pass
-    already produced its stub with a valuation attached, and emitting a second
-    thinner copy here would only give merge_startups something worse to choose
-    from.
-    """
+    """Scrape the companies the unicorn list misses. Names, not slugs, so a rename is followed."""
     result: list[Startup] = []
     for name in NOTABLE_NAMES:
         try:

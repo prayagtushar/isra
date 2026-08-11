@@ -24,8 +24,7 @@ jobs:
           - apps/evals
 
     services:
-      # Real pgvector instance so the retrieval integration tests actually run
-      # instead of silently skipping the way they do on a machine without Docker.
+      # A real pgvector instance, so the integration tests run instead of skipping.
       postgres:
         image: pgvector/pgvector:pg16
         env:
@@ -42,8 +41,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://isra:isra@localhost:5432/isra
-      # The integration tests bind to this and deliberately ignore DATABASE_URL
-      # so they can never write to a deployed database. See packages/retrieval/tests/dsn.py.
+      # The tests bind to this and ignore DATABASE_URL, so they cannot reach production.
       ISRA_TEST_DATABASE_URL: postgresql://isra:isra@localhost:5432/isra
 
     steps:
@@ -58,8 +56,7 @@ jobs:
       - name: Load database schema
         run: psql "$ISRA_TEST_DATABASE_URL" -f packages/retrieval/src/isra_retrieval/schema.sql
 
-      # The BGE embedder and cross-encoder are pulled from HuggingFace on first
-      # use. Cache them so every run does not re-download ~150 MB of weights.
+      # Cache the BGE weights so every run does not re-download ~150 MB.
       - name: Cache HuggingFace models
         uses: actions/cache@v4
         with:
@@ -94,7 +91,6 @@ jobs:
 
       - name: Build
         env:
-          # The web build fails loudly without this in production mode; supply a
-          # throwaway value so CI exercises the same code path as a real build.
+          # The production build fails without this, so supply a throwaway value.
           API_URL: http://localhost:8000
         run: bun run --filter web build

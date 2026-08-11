@@ -9,10 +9,7 @@ export function StartupCard({
   onClick: () => void;
 }) {
   const funding = formatFunding(startup.fundings);
-  // Y Combinator records carry a one-liner; Wikipedia ones never do, so more
-  // than half the grid rendered as a bare name and a valuation. The description
-  // is the same text the retriever works from, which makes falling back to it
-  // both accurate and the more useful thing to show.
+  // Only YC records carry a one-liner, so fall back to the text the retriever works from.
   const summary = startup.one_liner ?? startup.description ?? null;
   return (
     <button
@@ -25,8 +22,7 @@ export function StartupCard({
           {startup.name}
         </span>
         {funding && (
-          // Valuation is the only figure on the card, and the accent marks it as
-          // a measurement rather than more prose.
+          // Valuation is the only figure here, and the accent marks it as a measurement.
           <span className="shrink-0 font-mono text-[10px] tabular-nums text-accent">
             {funding}
           </span>

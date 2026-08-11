@@ -102,8 +102,7 @@ def test_shipped_multi_hop_items_require_every_entity():
 
 
 def test_shipped_expected_entities_are_not_mutually_ambiguous():
-    # `matches` is deliberately fuzzy. If two expected entities in the same
-    # "all" question matched each other, recall would be silently inflated.
+    # `matches` is deliberately fuzzy; two expected entities matching each other would inflate recall.
     for item in load_golden():
         if item.match != "all":
             continue

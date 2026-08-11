@@ -46,12 +46,5 @@ class Startup(BaseModel):
     @field_validator("sectors")
     @classmethod
     def canonicalize_sectors(cls, sectors: List[str]) -> List[str]:
-        """Reconcile sector vocabulary here rather than in each scraper.
-
-        Wikipedia and Y Combinator name the same sectors differently, and
-        merge_startups unions them by string equality -- so unless they agree
-        before the union, the same sector survives twice under two spellings.
-        Every record passes through this model, which makes it the one place
-        that cannot be bypassed by adding a third source.
-        """
+        """Reconcile sector vocabulary here, since merge_startups unions them by string equality."""
         return normalize_sectors(sectors)

@@ -1,12 +1,4 @@
-"""Database DSN used by the integration tests.
-
-Deliberately independent of ``DATABASE_URL`` / ``ISRA_DATABASE_URL``: the
-retrieval package calls ``load_dotenv()`` when ``db.py`` is imported, so the
-deployed connection string is present in ``os.environ`` during a test run. The
-integration tests insert and delete rows, so inheriting it would mutate the
-production database. Point the tests at another server with
-``ISRA_TEST_DATABASE_URL``.
-"""
+"""DSN for the integration tests, kept apart from DATABASE_URL so they cannot write to production."""
 
 import os
 from collections.abc import Mapping

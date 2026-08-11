@@ -96,9 +96,7 @@ class GenerationReport:
     items: list[ItemScore] = field(default_factory=list)
 
     def _applicable(self, metric: str) -> list[ItemScore]:
-        # Abstention is only attempted on unanswerable questions and the quality
-        # metrics only on answerable ones, so coverage must not divide by the
-        # whole set — that would report a permanent, meaningless shortfall.
+        # Each metric is only attempted on the questions it applies to, so coverage cannot divide by all.
         wants_answerable = metric != "abstention"
         return [i for i in self.items if i.answerable is wants_answerable]
 
@@ -131,8 +129,7 @@ async def evaluate_generation(
         answer = await generate_answer(client, model, item.question, chunks)
 
         if not item.answerable:
-            # Faithfulness and relevancy have no meaning without a correct
-            # answer; the only thing worth grading is whether it abstained.
+            # Faithfulness and relevancy mean nothing without a correct answer; grade the abstention.
             report.items.append(
                 ItemScore(
                     question=item.question,

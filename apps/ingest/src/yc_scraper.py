@@ -5,9 +5,7 @@ import httpx
 
 from src.schema import Startup
 
-# Community-maintained static mirror of YC's public company directory
-# (https://github.com/yc-oss/api). Plain static JSON on GitHub Pages — no API
-# key, no anti-bot. One request returns every YC company; we filter to India.
+# Community-maintained static mirror of YC's directory: one request, no key, no anti-bot.
 _YC_ALL_URL = "https://yc-oss.github.io/api/companies/all.json"
 USER_AGENT = "ISRA-Bot/0.1 (+https://github.com/prayagtushar/isra.git)"
 
@@ -21,13 +19,7 @@ def _founded_year(batch: str | None) -> int | None:
     return int(match.group()) if match else None
 
 def _tidy(text: str) -> str:
-    """Repair spacing in copy the companies wrote themselves.
-
-    These are self-submitted blurbs, and a few run words together around an
-    ampersand -- "rewards&flexible benefits" appears verbatim on a card. Spacing
-    it also helps full-text search, which would otherwise index
-    "rewards&flexible" as one token that no query will match.
-    """
+    """Repair spacing in self-submitted copy, which also stops FTS indexing "rewards&flexible"."""
     text = re.sub(r"(?<=\w)&(?=\w)", " & ", text)
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 
@@ -69,12 +61,7 @@ def _is_india(company: dict) -> bool:
     return "India" in (company.get("regions") or [])
 
 def scrape_yc_startups(limit: int | None = 50) -> list[Startup]:
-    """Return Indian YC companies mapped to the Startup model.
-
-    Fetches the static yc-oss directory once, keeps companies whose `regions`
-    include 'India', orders notable-first (top_company, then team size), and
-    maps each. Single HTTP request — no per-company fetch.
-    """
+    """Indian YC companies mapped to the Startup model, notable-first, in one HTTP request."""
     with httpx.Client(timeout=60, headers={"User-Agent": USER_AGENT}, follow_redirects=True) as client:
         resp = client.get(_YC_ALL_URL)
         resp.raise_for_status()

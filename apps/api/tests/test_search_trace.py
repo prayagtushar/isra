@@ -1,10 +1,4 @@
-"""POST /search/trace — one server-sent event per retrieval stage.
-
-The pipeline is patched out, so these test the endpoint's contract rather than
-retrieval: that each stage becomes its own event as it is produced, that a
-failure part-way through is reported instead of truncating the stream silently,
-and that the rate limit covers it.
-"""
+"""POST /search/trace: one event per stage, errors reported, and the rate limit shared with /search."""
 
 import json
 
@@ -77,8 +71,7 @@ def test_emits_one_event_per_stage_then_done(client, monkeypatch):
 
 
 def test_each_event_carries_the_timing_and_the_candidate_count(client, monkeypatch):
-    """The elapsed time is the justification for streaming at all, and the total
-    is what stops the last column reading as though it lost results."""
+    """Elapsed time justifies streaming; the total stops the last column reading as a loss."""
 
     def fake_stages(query, top_k=5, mode="hybrid+rerank"):
         yield _stage("vector", 21.456, total=100)
@@ -92,8 +85,7 @@ def test_each_event_carries_the_timing_and_the_candidate_count(client, monkeypat
 
 
 def test_a_failure_midway_is_reported_rather_than_silently_truncating(client, monkeypatch):
-    """Three stages then a dropped connection is indistinguishable from a
-    three-stage mode unless the error is sent."""
+    """Three stages then a dropped connection is indistinguishable from a three-stage mode."""
 
     def fake_stages(query, top_k=5, mode="hybrid+rerank"):
         yield _stage("vector", 20.0)
@@ -117,14 +109,12 @@ def test_a_failure_midway_is_reported_rather_than_silently_truncating(client, mo
     ],
 )
 def test_rejects_requests_the_reranker_should_not_be_asked_to_serve(client, body):
-    """Both search endpoints are public and both run the cross-encoder, so the
-    request has to be bounded the way /chat's is. top_k was unbounded."""
+    """Both search endpoints are public and both run the cross-encoder, so bound the request."""
     assert client.post("/search/trace", json=body).status_code == 422
 
 
 def test_shares_the_search_rate_limit():
-    """rate_limit matches by prefix, and /search/trace runs the same
-    cross-encoder as /search, so it must not get its own separate budget."""
+    """Same cross-encoder as /search, so it must not get its own separate budget."""
     from src.rate_limit import rule_for_path
 
     assert rule_for_path("/search/trace") == rule_for_path("/search")

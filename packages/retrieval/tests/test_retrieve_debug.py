@@ -10,13 +10,7 @@ from isra_retrieval.pipeline import retrieve_debug
 
 @pytest.fixture(autouse=True)
 def no_database():
-    """Stub out the connection ``retrieve_debug`` opens.
-
-    Every search function these tests touch is patched, but the pipeline still
-    opens a real connection to hand them. Without this the tests quietly run
-    against whatever ``DATABASE_URL`` is in the environment — which, thanks to
-    ``load_dotenv()``, is the deployed database.
-    """
+    """Stub the connection retrieve_debug opens, which would otherwise be the deployed database."""
 
     @contextmanager
     def _fake_conn():
