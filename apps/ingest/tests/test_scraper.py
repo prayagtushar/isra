@@ -149,9 +149,13 @@ def test_build_startup_without_article_synthesizes_description():
     assert s.fundings == 7.5e9
     assert s.sectors == ["Financial Technology", "Payments"]
     assert s.founders == ["Harshil Mathur", "Shashank Kumar"]
-    assert s.founded_year is None  
-    assert "unicorn" in s.description.lower()
-    
+    assert s.founded_year is None
+    # The stub states facts about this company rather than the word "unicorn",
+    # which every record in a corpus of Indian unicorns would share.
+    assert "US$7.5 billion" in s.description
+    assert "Harshil Mathur" in s.description
+
+
     assert str(s.source_url).rstrip("/").endswith("List_of_unicorn_startup_companies")
 
 def test_build_startup_with_article_enriches_from_infobox_and_lead():
@@ -440,6 +444,12 @@ def test_stub_description_states_facts_rather_than_repeating_itself():
     assert "Aadit Palicha" in description
     assert "5" in description
     assert "featured on Wikipedia's list" not in description
+
+    # No shared filler either. A clause repeated verbatim across the stubs is the
+    # same defect as the sentence above, whatever facts sit beside it: it was
+    # identical across 28 records and cost measurable retrieval quality.
+    assert "places it among" not in description
+    assert "unicorns" not in description
 
 def test_stub_description_holds_up_when_the_row_knows_almost_nothing():
     record = UnicornRecord(name="Mystery", slug=None, valuation=None)

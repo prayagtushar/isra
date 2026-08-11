@@ -6,7 +6,27 @@
 
 A hand-rolled Retrieval-Augmented Generation (RAG) system over Indian startup data, built without LangChain so that ranking, fusion and citation behaviour stay under direct control. The full pipeline — vector search + Postgres full-text search → RRF fusion → BGE reranker → streaming generation — is implemented from primitives and measured by an evaluation harness that is also hand-rolled.
 
-**Scope, stated honestly.** The corpus is 111 Indian startups scraped from Wikipedia's unicorn list and Y Combinator's directory — a deliberately small, verifiable dataset, not a web-scale index. At this size the interesting engineering is in *measuring* retrieval quality rather than in scaling it, and the numbers below are reported as measured, including where they contradict the design.
+**Scope, stated honestly.** The corpus is 116 Indian startups scraped from Wikipedia's unicorn list and Y Combinator's directory — a deliberately small, verifiable dataset, not a web-scale index. At this size the interesting engineering is in *measuring* retrieval quality rather than in scaling it, and the numbers below are reported as measured, including where they contradict the design and where they got worse.
+
+### The pipeline, resolving
+
+![The retrieval lab: four pipeline stages, each shown as it completes](assets/lab.png)
+
+One query, four stages, streamed as each finishes. The timings are the point:
+vector search, keyword search and RRF fusion land in **145–155 ms**, the
+cross-encoder takes **7,033 ms** — around 45× the rest combined — so the first
+three columns appear immediately instead of the whole page waiting on the slowest
+step. The arrows track every chunk's movement against the stage it is meant to
+improve on, which is what makes fusion's cost to direct lookups visible rather
+than merely reported.
+
+### Grounded answers, with the retrieval behind them
+
+![The chat: a multi-hop answer with inline citations beside its retrieval trace](assets/chat.png)
+
+Every claim carries an inline citation to the chunk it came from, and the trace
+panel shows the ranked candidates that produced it. On a question the corpus
+cannot answer, the model declines and names the source it checked.
 
 ```mermaid
 flowchart LR
@@ -254,7 +274,7 @@ SSE events:
 
 ## Evaluation results
 
-Generated: 2026-08-08 · questions: 41 · top_k: 5 · judge model: `anthropic/claude-haiku-4.5`
+Generated: 2026-08-11 · questions: 41 · top_k: 5 · judge model: `anthropic/claude-haiku-4.5`
 
 The golden set has four question types, because a single "name the startup" phrasing
 only measures one thing:
@@ -273,43 +293,73 @@ multi-hop questions; `recall@k` gives partial credit.
 
 | Mode | hit@5 | recall@5 | MRR |
 |---|---|---|---|
-| **vector** | **0.871** | **0.858** | **0.832** |
-| hybrid | 0.774 | 0.777 | 0.667 |
-| hybrid+rerank | 0.806 | 0.828 | 0.785 |
+| **vector** | **0.839** | **0.825** | **0.756** |
+| hybrid | 0.613 | 0.583 | 0.632 |
+| hybrid+rerank | 0.774 | 0.755 | 0.748 |
 
 ### By category (hit@5)
 
 | Mode | direct | paraphrase | multi_hop |
 |---|---|---|---|
-| vector | 1.000 | 1.000 | 0.500 |
-| hybrid | 0.833 | 1.000 | 0.375 |
-| hybrid+rerank | 0.833 | 0.909 | **0.625** |
+| vector | **0.917** | **1.000** | 0.500 |
+| hybrid | 0.667 | 0.818 | 0.250 |
+| hybrid+rerank | 0.750 | 1.000 | 0.500 |
 
-**What this changed.** On the larger question set plain vector search beats both
-hybrid variants, so `vector` is now the **default retrieval mode** — the previous
-default, `hybrid+rerank`, measured worse overall. The category split shows why:
-RRF fusion is what costs accuracy (direct lookups drop 1.000 → 0.833) because
-keyword hits displace the correct chunk on a corpus this small, and the
-cross-encoder only partly recovers it. The reranker does earn its place on
-multi-hop questions (0.500 → 0.625), which is the one case where re-scoring the
-wider fused candidate list genuinely helps. All three modes remain selectable in
-[`/lab`](https://isra.prayagtushar.xyz/lab).
-
-Next step is tuning RRF weighting rather than removing it — the fusion is
-under-tuned, not wrong in principle.
+**The finding.** Plain vector search beats both hybrid variants, so `vector` is
+the **default retrieval mode** — the original default, `hybrid+rerank`, measures
+worse. The category split shows where it goes wrong: RRF fusion loses direct
+lookups (0.917 → 0.667) because keyword hits displace the chunk vector search
+already had in first place, and the cross-encoder recovers only part of that
+(0.667 → 0.750). Fusion is under-tuned rather than wrong in principle, and
+tuning its weighting is the obvious next step. All three stages are visible in
+[`/lab`](https://isra.prayagtushar.xyz/lab), which is how the keyword list —
+the step that does the damage — became inspectable at all.
 
 ### Generation quality (`vector`, LLM-judge)
 
 | Metric | Mean | Coverage |
 |---|---|---|
-| Faithfulness | 0.947 | 31/31 |
-| Answer Relevancy | 0.724 | 31/31 |
-| Context Precision | 0.385 | 31/31 |
+| Faithfulness | 0.909 | 31/31 |
+| Answer Relevancy | 0.690 | 31/31 |
+| Context Precision | 0.332 | 31/31 |
 | **Abstention** (unanswerable only) | **1.000** | 10/10 |
 
 Abstention is the metric worth pointing at: on all 10 questions the corpus cannot
-answer, the model declined instead of inventing a fact. Context precision remains
-the weakest number and is the reason the fusion tuning above is the next task.
+answer, the model declined instead of inventing a fact, and said which source it
+had checked. Context precision is the weakest number and the reason fusion
+tuning is next.
+
+The unanswerable set is built to ask for facts that are *absent from records that
+are present* — Flipkart's last funding round, Razorpay's headcount, Zomato's
+share price. That is a harder test than asking about absent companies, and it
+survives the corpus growing.
+
+### These numbers went down, and that is the interesting part
+
+An earlier report (2026-08-08) recorded vector at hit@5 0.871, MRR 0.832 and
+context precision 0.385. Six commits then changed the corpus: 32 content-free
+boilerplate descriptions replaced with facts, four hand-written fixtures replaced
+with real scraped articles, four Wikipedia disambiguation pages rejected, sector
+vocabulary normalized. Retrieval measured *worse* afterwards, not better.
+
+The first hypothesis was wrong. The replacement stubs shared a clause — "which
+places it among India's unicorns" — byte-identical across 28 records and about a
+quarter of each one, which looked like the same defect as the boilerplate it
+replaced. Removing it moved almost nothing: recall@5 0.809 → 0.825, context
+precision 0.313 → 0.332, `hybrid` 0.710 → **0.613**. It was kept anyway, because
+filler repeated across records is wrong on its own terms, but it does not explain
+the drop.
+
+What remains is the corpus itself being genuinely different: real Wikipedia leads
+are longer and carry more tangential prose than a one-line stub, five more
+companies compete for every query, and full-text ranking is sensitive to document
+length, which is the most likely reason `hybrid` moved most. On n=41 a single
+question flipping is worth 0.024 of hit@5, so several of these deltas are two or
+three questions wide — the same instability the golden-set sizing note below is
+about.
+
+The honest summary: the corpus got more truthful and the retrieval metrics got
+slightly worse, and the ranking of the three modes did not change.
 
 Eval code lives in `apps/evals`; `EVALUATION.md` and `evaluation.json` are
 regenerated by `bun run eval`.

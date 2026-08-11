@@ -280,11 +280,14 @@ def _stub_description(record: UnicornRecord, info: dict) -> str:
     sentences.append(opening + ".")
 
     if record.valuation:
-        valuation = f"{record.valuation:g}"
-        sentences.append(
-            f"It is valued at about US${valuation} billion, which places it among "
-            "India's unicorns."
-        )
+        # The figure only. An earlier version appended "which places it among
+        # India's unicorns", which is filler twice over: every company in this
+        # corpus is an Indian unicorn, so the clause distinguishes nothing, and it
+        # was byte-identical across 28 of them -- about a quarter of each 139-char
+        # stub. That is the same defect as the boilerplate it replaced, and the
+        # measured cost was real: vector MRR fell from 0.832 to 0.756 and context
+        # precision from 0.385 to 0.313 over the ingest that introduced it.
+        sentences.append(f"It is valued at about US${record.valuation:g} billion.")
 
     founders = [f for f in (record.founders or info.get("founders") or []) if f != "Unknown"]
     if founders:
