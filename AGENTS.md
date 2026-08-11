@@ -1,16 +1,18 @@
-# AGENTS.md — Indian Startup Ecosystem RAG (ISRA)
+# AGENTS.md: Indian Startup Ecosystem RAG (ISRA)
 
 > Onboarding reference for AI coding agents working on this repo. Read this before modifying code or running commands.
+>
+> Verified against `7596df8` on 2026-08-11.
 
 ---
 
 ## Project overview
 
-ISRA is a RAG (Retrieval-Augmented Generation) system over Indian startup data. It demonstrates a hand-rolled retrieval pipeline: vector search + Postgres full-text search → RRF fusion → BGE rerank, backed by measured evals and a streaming Next.js chat UI.
+ISRA is a RAG (Retrieval-Augmented Generation) system over Indian startup data. It demonstrates a hand-rolled retrieval pipeline: vector search plus Postgres full-text search, then RRF fusion, then BGE rerank, backed by measured evals and a streaming Next.js chat UI.
 
 ```
 scrapers → startups.jsonl → chunk → embed → Postgres (chunks + vectors + tsvector)
-user query → /chat → retrieve(hybrid + rerank) → prompt → LLM (stream) → SSE → UI
+user query → /chat → retrieve(vector) → prompt → LLM (stream) → SSE → UI
                   └────────────── Langfuse trace ──────────────┘
 golden set → evals runner → retrieval (hit@k/MRR) + LLM-judge metrics → EVALUATION.md
 ```
@@ -18,12 +20,27 @@ golden set → evals runner → retrieval (hit@k/MRR) + LLM-judge metrics → EV
 Key product decisions:
 
 - **No LangChain.** The retrieval pipeline is intentionally hand-rolled.
-- **No Ragas/DeepEval.** Evals use a hand-rolled LLM-judge — Ragas declares the LangChain family (langchain, langchain-community, langchain-openai) as core dependencies, which this repo bans.
+- **No Ragas/DeepEval.** Evals use a hand-rolled LLM-judge. Ragas declares the LangChain family (langchain, langchain-community, langchain-openai) as core dependencies, which this repo bans.
 - **One Postgres** handles both vector (`pgvector`) and keyword (`tsvector`) search.
-- **Embedding model:** `BAAI/bge-small-en-v1.5` → 384-dimensional vectors.
+- **Embedding model:** `BAAI/bge-small-en-v1.5`, producing 384-dimensional vectors.
 - **Reranker:** BGE cross-encoder.
-- **LLM:** hosted API (Claude / OpenAI).
+- **LLM:** hosted API via OpenRouter (Claude / OpenAI models).
 - **Deployment target:** GCP Cloud Run (API), Vercel (web), Supabase (Postgres + pgvector).
+
+### Retrieval mode: read this before changing a default
+
+`retrieve()` in `packages/retrieval/src/isra_retrieval/pipeline.py` still declares
+`mode: str = "hybrid+rerank"` in its signature, but that is **not** what the running
+application uses. The web proxy sends `mode: body.mode ?? "vector"` for both
+`/search` and `/chat` (`apps/web/app/api/search/route.ts`, `apps/web/app/api/chat/route.ts`),
+because measured evals put plain vector search ahead of both hybrid variants.
+
+The exception is deliberate: `apps/web/app/api/search/trace/route.ts` sends
+`hybrid+rerank`, because `/lab` exists to show all four stages and vector mode
+would skip three of them.
+
+So the library default and the application default disagree. Do not "fix" one to
+match the other without reading `EVALUATION.md` first.
 
 ---
 
@@ -35,7 +52,7 @@ This is a **Turborepo + uv workspace** monorepo.
 .
 ├── apps/
 │   ├── api/              # FastAPI service
-│   ├── evals/            # Ragas eval runner
+│   ├── evals/            # hand-rolled golden-set eval runner + LLM-judge
 │   ├── ingest/           # scrapers → chunks → embeddings → Postgres
 │   └── web/              # Next.js 16 chat UI
 ├── packages/
@@ -52,55 +69,63 @@ This is a **Turborepo + uv workspace** monorepo.
 
 ### `apps/api`
 
-- **Stack:** FastAPI, SSE streaming, Langfuse, psycopg, pgvector, sentence-transformers, numpy, bcrypt.
+- **Stack:** FastAPI, SSE streaming, Langfuse, psycopg, pgvector, sentence-transformers, numpy.
 - **Entry:** `apps/api/src/main.py`.
 - **Endpoints:**
-  - `GET /health`
-  - `POST /search` — ranked chunks.
-  - `POST /chat` — SSE streaming chat with sources + inline citations.
-  - `POST /feedback` — thumbs up/down stored in Postgres.
-  - `GET /startups` — paginated startup browser.
-  - `POST /ingest` — SSE ingest progress.
-- **CORS:** configurable via `ISRA_CORS_ORIGINS` (default `*` locally).
-- **Run locally:** `bun run dev:api` → `http://localhost:8000`.
+  - `GET /health`, with database connectivity verification.
+  - `POST /search` ranked chunks.
+  - `POST /search/trace` one SSE event per pipeline stage, emitted as each completes. Backs `/lab`.
+  - `POST /chat` SSE streaming chat with sources and inline citations.
+  - `POST /feedback` thumbs up or down, stored in Postgres.
+  - `GET /startups` paginated startup browser.
+  - `POST /ingest` SSE ingest progress. Requires `X-ISRA-Admin-Key`.
+- **CORS:** configurable via `ISRA_CORS_ORIGINS` (default `*`).
+- **Abuse controls:** per-IP rate limits, bounded request sizes, and a global
+  daily answer ceiling in `apps/api/src/budget.py`. See the README for the full
+  ordering and what each layer actually stops.
+- **Run locally:** `bun run dev:api`, serving `http://localhost:8000`.
 
 ### `apps/ingest`
 
 - **Stack:** httpx, BeautifulSoup4, lxml, Pydantic v2.
-- **Goal:** scrape Indian startups, normalize into a `Startup` Pydantic model, dedupe, chunk (naive + semantic), embed, and load into Postgres.
+- **Goal:** scrape Indian startups, normalize into a `Startup` Pydantic model, dedupe, chunk (naive and semantic), embed, and load into Postgres.
 - **Run:** `bun run ingest`.
 
 ### `apps/evals`
 
-- **Stack:** `openai` SDK (→ OpenRouter), pydantic-settings; no external eval framework.
-- **Goal:** golden-set evaluation — deterministic retrieval-mode comparison (hit@k / MRR across `vector`, `hybrid`, `hybrid+rerank`) plus reference-free generation metrics (faithfulness, answer relevancy, context precision) scored by a hand-rolled LLM-judge — outputting `EVALUATION.md` (+ `evaluation.json` sidecar).
-- **Run:** `bun run eval` (add `-- --no-generation` for the retrieval-only, no-LLM path).
+- **Stack:** `openai` SDK pointed at OpenRouter, pydantic-settings. No external eval framework.
+- **Goal:** golden-set evaluation. It runs a deterministic retrieval-mode comparison (hit@k and MRR across `vector`, `hybrid`, `hybrid+rerank`) plus reference-free generation metrics (faithfulness, answer relevancy, context precision) scored by a hand-rolled LLM-judge, and writes `EVALUATION.md` with an `evaluation.json` sidecar.
+- **Golden set:** `apps/evals/src/golden.jsonl`, 41 questions across four categories (`direct`, `paraphrase`, `multi_hop`, `unanswerable`).
+- **Run:** `bun run eval`. Add `-- --no-generation` for the retrieval-only path, which needs no LLM.
+- **`EVALUATION.md` and `evaluation.json` are generated artifacts.** Do not hand-edit them. Regenerate with `bun run eval`.
 
 ### `apps/web`
 
-- **Stack:** Next.js 16.2.0, React 19.2.0, TypeScript 5.9.2, Bun, Tailwind CSS v4, GSAP, Radix Slot.
-- **Public pages:** every page. `/` is the chat itself — there is no landing page and no sign-in.
-- **Protected pages:** `/chat`, `/search`, `/lab`, `/startups`, `/ingest`.
-- **Auth:** none. Accounts were removed; the only gate is a shared `ISRA_ADMIN_KEY` on `POST /ingest`, sent as `X-ISRA-Admin-Key`. Abuse is bounded server-side instead: per-IP rate limits, request size caps, and a global daily ceiling on generated answers (`apps/api/src/budget.py`).
-- **Run:** `bun run dev:web` → `http://localhost:3000`.
+- **Stack:** Next.js 16.2.0, React 19.2.0, TypeScript 5.9.2, Bun, Tailwind CSS v4, Framer Motion, Radix Slot.
+- **Pages:** every page is public. `/` is the chat itself. There is no landing page and no sign-in.
+- **Auth: none.** Accounts were removed in `787276a`. The only gate is a shared
+  `ISRA_ADMIN_KEY` on `POST /ingest`, sent as `X-ISRA-Admin-Key`. Abuse is bounded
+  server-side instead, by per-IP rate limits, request size caps, and a global daily
+  ceiling on generated answers.
+- **Run:** `bun run dev:web`, serving `http://localhost:3000`.
 
-### Retrieval visualizer
+### The retrieval lab (`/lab`)
 
-- Enabled per-user via the sidebar toggle.
-- Sends `trace: true` on `/chat` requests.
-- FastAPI emits a `trace` SSE event with per-stage results (vector, keyword, RRF fusion, BGE rerank).
-- Server-side kill switch: set `ISRA_ENABLE_RETRIEVAL_TRACE=false`.
+- A dedicated page, not a per-user toggle on `/chat`.
+- Calls `POST /search/trace`, which streams one SSE event per stage as that stage finishes: vector search, keyword search, RRF fusion, BGE rerank.
+- The first three stages land in roughly 145 to 155 ms; the cross-encoder takes about 7 seconds, so streaming per stage is what keeps the page from waiting on the slowest step.
+- Sends `hybrid+rerank` deliberately, so all four stages have something to show.
 
 ### `packages/retrieval`
 
 - **Stack:** pgvector, sentence-transformers, psycopg, numpy.
 - **Responsibility:** shared data layer and retrieval logic.
-- **Public API:** `retrieve(query, top_k, mode)` where `mode ∈ {vector, hybrid, hybrid+rerank}`.
+- **Public API:** `retrieve(query, top_k, mode)` where `mode` is one of `vector`, `hybrid`, `hybrid+rerank`. See the retrieval mode note above before changing the default.
 
 ### `packages/contracts`
 
 - TypeScript API types used by the UI.
-- **Regenerate:** `bun run gen:contracts` (requires API running on `localhost:8000`).
+- **Regenerate:** `bun run gen:contracts`, which requires the API running on `localhost:8000`.
 
 ---
 
@@ -126,7 +151,7 @@ This is a **Turborepo + uv workspace** monorepo.
 | Observability | Langfuse Cloud |
 | Local infra | Docker Compose |
 | Deployment | GCP Cloud Run, Vercel, Supabase |
-| Testing | pytest (Python) |
+| Testing | pytest (Python), Vitest (web) |
 
 ---
 
@@ -186,11 +211,11 @@ bun run eval
 
 ### Turborepo tasks (`turbo.json`)
 
-- `dev` — persistent, not cached.
-- `build` — depends on `^build`, outputs `.next/**` and `dist/**`.
-- `lint` — no special config.
-- `test` — no special config.
-- `typecheck` — depends on `^build`.
+- `dev` is persistent and not cached.
+- `build` depends on `^build`, and outputs `.next/**` and `dist/**`.
+- `lint` has no special config.
+- `test` has no special config.
+- `typecheck` depends on `^build`.
 
 ---
 
@@ -208,7 +233,7 @@ bun run eval
 
 - Root `pyproject.toml` defines the uv workspace with members: `apps/api`, `apps/ingest`, `apps/evals`, `packages/retrieval`.
 - Each Python package has its own `pyproject.toml`, uses `hatchling`, and declares `packages = ["src"]` (or `"src/isra_retrieval"`).
-- Each Python package declares `dev = ["pytest"]` dependency group.
+- Each Python package declares a `dev = ["pytest"]` dependency group.
 - Shared local packages are referenced via workspace sources.
 
 ### Source layout
@@ -237,23 +262,61 @@ Do not add LangChain, LangChain Community, or DeepEval dependencies.
 
 ## Testing strategy
 
+Tests exist and run in CI. They are not planned work.
+
 - **Python:** pytest in each package.
-- **Planned tests:**
-  - `packages/retrieval`: RRF fusion correctness, rank ordering, mode parity against a fixture DB.
-  - `apps/ingest`: schema validation, dedup/merge logic, cached-run idempotency.
-  - `apps/api`: endpoint tests with mocked LLM, SSE event-sequence tests.
-  - `apps/evals`: hit@k/MRR math with an injected `retrieve`, judge score-parsing/clamping, report rendering — all offline (no DB, no network).
+  - `packages/retrieval`: RRF fusion correctness, rank ordering, mode parity against a fixture database.
+  - `apps/ingest`: schema validation, dedup and merge logic, cached-run idempotency.
+  - `apps/api`: endpoint tests with a mocked LLM, and SSE event-sequence tests.
+  - `apps/evals`: hit@k and MRR math with an injected `retrieve`, judge score parsing and clamping, and report rendering. All offline, needing no database and no network.
+- **Web:** Vitest, plus lint and a production build.
 - **Run Python tests:** `uv run --directory <package> pytest`.
 - **Run all monorepo tasks:** `bun run test`.
+
+### Integration tests bind to their own database
+
+The retrieval integration tests read `ISRA_TEST_DATABASE_URL` (default
+`postgresql://isra:isra@localhost:5432/isra`) and **deliberately ignore**
+`DATABASE_URL`. They insert and delete rows, and `isra_retrieval.db` calls
+`load_dotenv()` on import, so without that separation a local test run would
+write to whatever database `.env` points at. They skip when no test database is
+reachable.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request: the four Python
+suites against a real `pgvector` service container, plus the web app's lint, unit
+tests and production build.
 
 ---
 
 ## Environment variables and secrets
 
-- `DATABASE_URL` — Postgres connection string.
-- `AUTH_SECRET` — Secret used to sign web app session cookies (≥32 chars required in production).
-- Langfuse keys for tracing.
-- LLM API keys for `/chat` and evals.
+There is no `AUTH_SECRET` and there are no session cookies. Accounts were removed
+in `787276a`, so there is nothing to sign.
+
+**API**
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` or `ISRA_DATABASE_URL` | Postgres connection string |
+| `OPENROUTER_API_KEY` | LLM access for `/chat` |
+| `ISRA_OPENROUTER_API_KEY` | LLM access for evals |
+| `ISRA_CORS_ORIGINS` | Comma-separated allowed origins for direct API calls (default `*`) |
+| `ISRA_TRUSTED_PROXY_HOPS` | Proxy hops appended to `X-Forwarded-For` (default `1`, correct for Cloud Run) |
+| `ISRA_DAILY_CHAT_LIMIT` | Answers generated per UTC day (default `200`). `0` stops answering, `-1` removes the cap |
+| `ISRA_PROXY_SECRET` | Shared with the web app so the API can trust the forwarded caller address. Must match on both sides, or every visitor shares one rate-limit bucket |
+| `ISRA_ADMIN_KEY` | Shared key required by `POST /ingest`. Unset means `/ingest` is closed, so a deployment that forgets it fails closed rather than open |
+| `ISRA_LANGFUSE_PUBLIC_KEY` | Optional, for tracing |
+| `ISRA_LANGFUSE_SECRET_KEY` | Optional, for tracing |
+| `ISRA_LANGFUSE_HOST` | Optional, Langfuse host URL |
+
+**Web**
+
+| Variable | Purpose |
+|---|---|
+| `API_URL` | Deployed FastAPI endpoint, required in production |
+| `ISRA_PROXY_SECRET` | Must match the API's value |
 
 All `.env*` files are gitignored. Do not commit secrets.
 
@@ -261,9 +324,11 @@ All `.env*` files are gitignored. Do not commit secrets.
 
 ## Deployment
 
-- **API:** GCP Cloud Run (ships the BGE models; ~500MB image).
+- **API:** GCP Cloud Run. The image ships the BGE models and is roughly 1.5 GB compressed. It runs with 4 vCPU so cross-encoder reranking returns in about 4.5 seconds instead of about 20, and with `--max-instances 1` because rate limits are held in process.
 - **Web:** Vercel.
 - **Database:** Supabase Postgres with pgvector.
+
+Full runbook, including cost ceilings and the Artifact Registry cleanup policy, is in the local `docs/DEPLOY.md`.
 
 ---
 
@@ -271,11 +336,10 @@ All `.env*` files are gitignored. Do not commit secrets.
 
 - Do not commit `.env` files, API keys, or database credentials.
 - Keep `DATABASE_URL` configurable via environment variable.
-- The FastAPI server is intended to be called by the Next.js server-side route handler to avoid CORS and exposed secrets in the browser. Configure `ISRA_CORS_ORIGINS` if the API must also accept direct browser calls.
-- Session cookies are signed with `AUTH_SECRET`. Use a cryptographically random secret of at least 32 characters in production and rotate it carefully — existing sessions will be invalidated.
-- Password reset tokens expire after 1 hour and are single-use.
+- The FastAPI server is intended to be called by the Next.js server-side route handler, which avoids CORS problems and keeps secrets out of the browser. Configure `ISRA_CORS_ORIGINS` if the API must also accept direct browser calls.
 - LLM API keys must live server-side only.
-- Docker Compose exposes Postgres on `localhost:5432` with weak local credentials (`isra:isra`); do not expose this to a network.
+- `ISRA_PROXY_SECRET` must be set on both sides. Without it the API sees every visitor as the hosting egress IP, and one person can exhaust everyone's budget.
+- Docker Compose exposes Postgres on `localhost:5432` with weak local credentials (`isra:isra`). Do not expose this to a network.
 
 ---
 
@@ -283,5 +347,6 @@ All `.env*` files are gitignored. Do not commit secrets.
 
 - Use **Bun** for JS: `bun install`, `bun run <script>`.
 - Use **uv** for Python: `uv sync`, `uv run`.
-- Do not assume a feature exists; verify by reading the file.
-- Update this `AGENTS.md` if you change the technology stack, package layout, build commands, or deployment strategy.
+- Do not assume a feature exists. Verify by reading the file.
+- `EVALUATION.md` and `evaluation.json` are generated. Regenerate, do not edit.
+- Update this `AGENTS.md` if you change the technology stack, package layout, build commands, or deployment strategy, and move the verified-against SHA at the top when you do.
